@@ -114,7 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <img src="/DWV2.png" alt="Logo" className="w-40" />
         <button onClick={onToggleSidebar} className="p-1">
           {/* Optionally, you can add a toggle icon here */}
-          <span className="text-sm text-gray-600">Toggle</span>
+          {/* <span className="text-sm text-gray-600">Toggle</span> */}
         </button>
       </div>
       {/* Projects List */}
