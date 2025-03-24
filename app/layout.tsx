@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { SnackProvider } from "@/components/common/feedback/Snackbar";
 import { AuthProvider } from "@/components/services/AuthProvider";
+import { MobileRestriction } from "@/components/common/MobileRestriction";
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -30,7 +31,9 @@ export default function RootLayout({
       >
         <AuthProvider>
           <SnackProvider>
-            {children}
+            <MobileRestriction>
+              {children}
+            </MobileRestriction>
           </SnackProvider>
         </AuthProvider>
       </body>
