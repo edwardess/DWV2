@@ -20,6 +20,7 @@ import React, {
   XMarkIcon,
   PencilIcon,
   ChevronDownIcon,
+  CheckIcon,
   } from "@heroicons/react/24/outline";
   import HashLoader from "react-spinners/HashLoader";
   import { useAuth } from "@/components/services/AuthProvider";
@@ -748,26 +749,51 @@ const ScrollHintIndicator: React.FC = () => (
               )}
             </div>
             <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "rounded-full w-9 h-9 p-0 border-muted-foreground/30",
-                  editing ? "bg-blue-50 border-blue-300 text-blue-600" : ""
-                )}
-                onClick={() => onToggleEdit(!editing)}
-                disabled={isApprovalLoading}
-              >
-                <PencilIcon className="h-4 w-4" />
-                <span className="sr-only">{editing ? "Cancel Edit" : "Edit"}</span>
-              </Button>
-              <button
-                className="rounded-full w-9 h-9 inline-flex items-center justify-center border border-muted-foreground/30 hover:bg-accent hover:text-accent-foreground carousel-close-action"
-                onClick={onClose}
-              >
-                <XMarkIcon className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </button>
+              {editing ? (
+                <>
+                  <Button
+                    type="submit"
+                    form="detailsForm"
+                    variant="default"
+                    size="sm"
+                    className="rounded-full w-9 h-9 p-0 bg-green-600 hover:bg-green-700 text-white"
+                    disabled={isSaving}
+                  >
+                    <CheckIcon className="h-4 w-4" />
+                    <span className="sr-only">Save</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full w-9 h-9 p-0 border-muted-foreground/30"
+                    onClick={() => onToggleEdit(false)}
+                    disabled={isSaving}
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                    <span className="sr-only">Cancel</span>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full w-9 h-9 p-0 border-muted-foreground/30"
+                    onClick={() => onToggleEdit(true)}
+                    disabled={isApprovalLoading || isSaving}
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                    <span className="sr-only">Edit</span>
+                  </Button>
+                  <button
+                    className="rounded-full w-9 h-9 inline-flex items-center justify-center border border-muted-foreground/30 hover:bg-accent hover:text-accent-foreground carousel-close-action"
+                    onClick={onClose}
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </DialogHeader>
