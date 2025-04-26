@@ -64,6 +64,7 @@ const RenderThirdColumn: React.FC<RenderThirdColumnProps> = ({
                   <p>No thumbnail available</p>
                   {editing && (
                     <button
+                      type="button"
                       onClick={() => setShowChangePhotoConfirmation(true)}
                       className="mt-3 px-4 py-2 rounded-lg bg-gray-700 text-white text-xs flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors"
                     >
@@ -78,6 +79,7 @@ const RenderThirdColumn: React.FC<RenderThirdColumnProps> = ({
             {editing && image?.url && (
               <div className="mt-4 w-full flex justify-center">
                 <button
+                  type="button"
                   onClick={() => setShowChangePhotoConfirmation(true)}
                   className="px-4 py-2 rounded-lg bg-gray-700 text-white text-xs flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors"
                 >

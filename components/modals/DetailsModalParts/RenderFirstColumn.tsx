@@ -62,7 +62,7 @@ interface RenderFirstColumnProps {
   setComments: React.Dispatch<React.SetStateAction<Comment[]>>;
   newComment: string;
   setNewComment: (comment: string) => void;
-  handlePostComment: () => Promise<void>;
+  handlePostComment: (e?: React.MouseEvent | React.FormEvent) => Promise<void>;
   toggleLike: (commentId: string) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
   attachments: Attachment[];
@@ -460,28 +460,30 @@ const RenderFirstColumn: React.FC<RenderFirstColumnProps> = ({
           )}
 
           {/* Comments Card - Present in both view and edit modes */}
-          <Card className="shadow-sm border-[1.5px] border-border/70 bg-muted/10 w-full overflow-hidden">
-            <CardHeader className="py-3 bg-muted/30">
-              <CardTitle className="text-sm font-medium flex items-center">
-                <ChatBubbleLeftEllipsisIcon className="h-5 w-5 mr-2 text-primary" />
-                Comments
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <CommentsSection
-                comments={comments}
-                user={user}
-                newComment={newComment}
-                setNewComment={setNewComment}
-                handlePostComment={handlePostComment}
-                toggleLike={toggleLike}
-                deleteComment={deleteComment}
-                COMMENT_MAX_LENGTH={COMMENT_MAX_LENGTH}
-                commentTextStyle={"whitespace-pre-wrap break-words text-sm"}
-                commentsContainerRef={commentsContainerRef}
-              />
-            </CardContent>
-          </Card>
+          {!editing && (
+            <Card className="shadow-sm border-[1.5px] border-border/70 bg-muted/10 w-full overflow-hidden">
+              <CardHeader className="py-3 bg-muted/30">
+                <CardTitle className="text-sm font-medium flex items-center">
+                  <ChatBubbleLeftEllipsisIcon className="h-5 w-5 mr-2 text-primary" />
+                  Comments
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                <CommentsSection
+                  comments={comments}
+                  user={user}
+                  newComment={newComment}
+                  setNewComment={setNewComment}
+                  handlePostComment={handlePostComment}
+                  toggleLike={toggleLike}
+                  deleteComment={deleteComment}
+                  COMMENT_MAX_LENGTH={COMMENT_MAX_LENGTH}
+                  commentTextStyle={"whitespace-pre-wrap break-words text-sm"}
+                  commentsContainerRef={commentsContainerRef}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
         {showScrollIndicator && <ScrollHintIndicator />}
       </ScrollArea>

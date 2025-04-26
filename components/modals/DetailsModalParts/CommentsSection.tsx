@@ -24,7 +24,7 @@ interface CommentsSectionProps {
   user: any;
   newComment: string;
   setNewComment: (val: string) => void;
-  handlePostComment: () => Promise<void>;
+  handlePostComment: (e?: React.MouseEvent | React.FormEvent) => Promise<void>;
   toggleLike: (commentId: string) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
   COMMENT_MAX_LENGTH: number;
@@ -91,7 +91,12 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
            
   <div className="flex items-center gap-1 relative group">
     <button
-      onClick={() => toggleLike(comment.id)}
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleLike(comment.id);
+      }}
       className="focus:outline-none hover:scale-110 transition-transform"
     >
       {comment.likes.find((like) => like.uid === user.uid) ? (
@@ -134,7 +139,12 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
                   </div>
                   {comment.userId === user.uid && (
                     <button 
-                      onClick={() => deleteComment(comment.id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteComment(comment.id);
+                      }}
                       className="hover:bg-gray-300 p-1 rounded transition-colors"
                     >
                       <TrashIcon className="h-4 w-4 text-gray-500" />
@@ -165,7 +175,8 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             {newComment.length}/{COMMENT_MAX_LENGTH} characters
           </div>
           <button
-            onClick={handlePostComment}
+            type="button"
+            onClick={(e) => handlePostComment(e)}
             disabled={!newComment.trim()}
             className={`mt-2 w-full rounded px-3 py-1 text-xs text-white transition-colors ${
               newComment.trim() ? 'bg-gray-700 hover:bg-gray-700' : 'bg-gray-300 cursor-not-allowed'

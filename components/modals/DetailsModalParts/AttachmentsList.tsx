@@ -67,6 +67,7 @@ const AttachmentsList: React.FC<AttachmentsListProps> = ({ attachments, editing,
                 </a>
                 {editing && (
                   <button
+                    type="button"
                     onClick={() => handleDeleteAttachment(att)}
                     className="p-1 hover:bg-gray-100 rounded transition-colors"
                     title="Delete"

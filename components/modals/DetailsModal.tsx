@@ -29,7 +29,17 @@ import React, {
   import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
   import debounce from "lodash-es/debounce";
   import ApproveSwitch from "@/components/common/feedback/ApproveSwitch";
-  import { doc, updateDoc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+  import { 
+    doc, 
+    updateDoc, 
+    getDoc, 
+    setDoc, 
+    serverTimestamp,
+    collection,
+    query,
+    getDocs,
+    orderBy
+  } from "firebase/firestore";
   import { db } from "@/components/services/firebaseService";
   import { useSnack } from "@/components/common/feedback/Snackbar";
   import { SocialMediaInstance, socialMediaConfig } from "@/components/ui/social-media-switch";
@@ -67,6 +77,9 @@ import RenderFirstColumn from "./DetailsModalParts/RenderFirstColumn";
   // Import updated AttachmentDropZone (without the attachments list)
   import AttachmentDropZone from "@/components/common/media/AttachmentDropZone";
   
+  // Import ActivityLog component
+  import ActivityLog, { Activity } from "./DetailsModalParts/ActivityLog";
+  
   // Constants
   const DESCRIPTION_THRESHOLD = 1000;
   const CAPTION_THRESHOLD = 1000;
@@ -99,14 +112,15 @@ export interface ExtendedImageMeta extends Omit<ImageMeta, 'contentType' | 'vide
   id: string;
   contentType: string;
   videoEmbed?: string; // Make this optional to match usage throughout component
-    comments?: Comment[];
+  comments?: Comment[];
   caption?: string;
-    attachments?: Attachment[];
+  attachments?: Attachment[];
   carouselArrangement?: CarouselPhoto[];
   projectId?: string; // Add optional projectId that might be present in the image metadata
   instance?: SocialMediaInstance; // Add optional instance to track which social media this belongs to
+  activities?: Activity[] | any[]; // Allow both Activity[] and any[] for Firestore compatibility
   [key: string]: any; // Allow indexed access for dynamic properties
-  }
+}
   
   interface DetailsModalProps {
     visible: boolean;
@@ -114,8 +128,7 @@ export interface ExtendedImageMeta extends Omit<ImageMeta, 'contentType' | 'vide
     image?: ExtendedImageMeta;
     onSave: (updatedImage: ExtendedImageMeta) => Promise<void>;
     onDelete?: (imageId: string) => Promise<void>;
-    projectId?: string; // Make projectId optional in props
-    logActivity?: (message: string) => Promise<void>; // Add optional logActivity
+    projectId?: string;
   }
 
 // ScrollHintIndicator Component
@@ -137,7 +150,6 @@ const ScrollHintIndicator: React.FC = () => (
     onSave,
     onDelete,
     projectId,
-    logActivity,
   }: DetailsModalProps): JSX.Element | null => {
   const { user } = useAuth();
   const { createSnack } = useSnack();
@@ -177,44 +189,31 @@ const ScrollHintIndicator: React.FC = () => (
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loadingCopyInstance, setLoadingCopyInstance] = useState<SocialMediaInstance | null>(null);
   const [successCopyInstance, setSuccessCopyInstance] = useState<SocialMediaInstance | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isActivityExpanded, setIsActivityExpanded] = useState(false);
   
     useEffect(() => {
     if (visible && image) {
-      // Ensure the image has an ID property - if not, try to derive one
-      if (!image.id && Object.keys(image).some(key => key.startsWith('img_') || key.includes('_id'))) {
-        // Look for a property that might be an ID
-        const possibleIdKey = Object.keys(image).find(key => 
-          key.startsWith('img_') || key.includes('_id')
-        );
-        
-        if (possibleIdKey) {
-          console.log(`Found possible ID key: ${possibleIdKey} with value: ${image[possibleIdKey]}`);
-          
-          // Create a new image object with the ID
-          const imageWithId = {
-            ...image,
-            id: image[possibleIdKey]
-          };
-          
-          // Update local state
-          if (onSave) {
-            console.log("Updating image with derived ID");
-            onSave(imageWithId).catch(error => {
-              console.error("Error updating image with derived ID:", error);
-            });
-          }
-        }
-      }
+      // Debug image structure
+      console.log('*** DETAILS MODAL IMAGE DATA ***');
+      console.log('image:', image);
+      console.log('projectId:', projectId);
+      console.log('instance:', image.instance);
       
-        setDescText(image.description || "");
-        setCaptionText(image.caption || "");
-        setComments(image.comments || []);
+      // Initialize form fields from image data
+      setDescText(image.description || "");
+      setCaptionText(image.caption || "");
+      setComments(image.comments || []);
       setAttachments(image.attachments || []);
       setEditContentType(image.contentType || "Photo");
       setLocalApprovalState(image.label === "Approved");
+      
+      // Load activities from separate Firestore collection
+      fetchActivities(image.id);
+      
       setEditing(false);
     }
-  }, [visible, image, onSave]);
+  }, [visible, image, projectId]);
 
   useEffect(() => {
     // Extract the current instance from the image's data if available
@@ -268,11 +267,19 @@ const ScrollHintIndicator: React.FC = () => (
 
   // Description and caption change handlers
   const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setDescText(e.target.value);
+    const newValue = e.target.value;
+    setDescText(newValue);
+    if (image?.description !== undefined && newValue !== image.description) {
+      logActivity('updated the description');
+    }
   };
 
   const handleCaptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setCaptionText(e.target.value);
+    const newValue = e.target.value;
+    setCaptionText(newValue);
+    if (image?.caption !== undefined && newValue !== image.caption) {
+      logActivity('updated the caption');
+    }
   };
 
   // Process attachment files for edit mode
@@ -351,157 +358,175 @@ const ScrollHintIndicator: React.FC = () => (
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
-    // Check if a carousel save action button triggered this
-    // Look for any element with carousel-save-action class in the event path
-    const target = e.target as HTMLElement;
-    let isFromButton = false;
-    
-    // Check if the event comes from a carousel-save-action button
-    if ((e as any).nativeEvent?.submitter?.classList?.contains('carousel-save-action')) {
-      isFromButton = true;
+    // Skip carousel save actions
+    if ((e as any).nativeEvent?.submitter?.type === "button" || 
+        (e as any).nativeEvent?.submitter?.classList?.contains('carousel-save-action')) {
+      return;
     }
     
-    // Don't proceed with form submission if it's a carousel save action
-    if (isFromButton) {
-      console.log("Carousel save action detected - preventing form submission");
-        return;
-      }
-    
-    if (!image || !formRef.current) return;
+    if (!image || !formRef.current || !user) return;
     
     const formData = new FormData(formRef.current);
     const title = formData.get("title") as string;
     const label = formData.get("label") as string;
     const contentType = formData.get("contentType") as string;
-    // Get videoEmbed input value - this is crucial for saving the embed URL
     const videoEmbed = formData.get("videoEmbed") as string;
     
     setIsSaving(true);
     
     try {
-      // Validate required fields
+      // Validate title
       if (!title.trim()) {
         createSnack("Title is required", "error");
         setIsSaving(false);
         return;
       }
       
-      const updatedImage: ExtendedImageMeta = {
+      // Create activity for edit save
+      const activityId = `activity_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const newActivity = {
+        id: activityId,
+        userId: user.uid,
+        userName: user.displayName || "Unknown User",
+        userPhoto: user.photoURL || undefined,
+        action: "saved changes to content",
+        timestamp: new Date(),
+      };
+      
+      // Update activities state optimistically
+      const updatedActivities = [newActivity, ...activities];
+      setActivities(updatedActivities);
+      
+      // Save the activity to the activities collection
+      const activityDocRef = doc(db, "images", image.id, "activities", activityId);
+      
+      // Format activity for Firestore
+      const firestoreActivity = {
+        ...newActivity,
+        imageId: image.id,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      };
+      
+      // Save activity
+      await setDoc(activityDocRef, firestoreActivity);
+      
+      // Create complete updated image (without activities)
+      const updatedImage = {
         ...image,
         title,
         description: descText,
         label,
         contentType,
         caption: captionText,
-        attachments: attachments,
-        // Include the videoEmbed in the updated image data
+        attachments,
         videoEmbed: contentType.toLowerCase() === "video" || contentType.toLowerCase() === "reel" 
           ? videoEmbed 
           : image.videoEmbed,
-        lastUpdated: new Date(), // Add timestamp for tracking when content was last updated
+        lastUpdated: new Date()
       };
       
-      // Maximum retries for network errors
-      const maxRetries = 2;
-      let retryCount = 0;
-      let success = false;
-      
-      while (retryCount <= maxRetries && !success) {
-        try {
-          await onSave(updatedImage);
-          success = true;
-          setEditing(false);
-          createSnack("Changes saved successfully", "success");
-        } catch (error) {
-          retryCount++;
-          console.error(`Error saving changes (attempt ${retryCount}/${maxRetries}):`, error);
-          
-          if (retryCount <= maxRetries) {
-            // Wait before retry with exponential backoff
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
-            console.log(`Retrying save operation...`);
-          } else {
-            throw error; // Rethrow after all retries
-          }
-        }
-      }
-    } catch (error: unknown) {
+      // Save to database via parent component's onSave handler
+      await onSave(updatedImage);
+      setEditing(false);
+      createSnack("Changes saved successfully", "success");
+    } catch (error) {
       console.error("Error saving changes:", error);
-      createSnack(error instanceof Error ? error.message : "An unknown error occurred while saving", "error");
+      createSnack("An error occurred while saving", "error");
     } finally {
       setIsSaving(false);
     }
   };
   
   // Comment posting handler
-    const handlePostComment = useCallback(async () => {
+  const handlePostComment = useCallback(async (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     if (!user || !image || !newComment.trim() || isPostingComment) return;
     
-      setIsPostingComment(true);
+    setIsPostingComment(true);
     setCommentError("");
     
     const commentId = `comment_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const timestamp = new Date();
-    const previousComments = [...comments];
-    
-    const newCommentObj: Comment = {
+    const newCommentObj = {
       id: commentId,
       userPhoto: user.photoURL || `/default-avatar.png`,
-        userName: user.displayName || user.email || "Anonymous User",
+      userName: user.displayName || user.email || "Anonymous User",
       text: newComment.trim(),
-        likes: [],
-        userId: user.uid,
+      likes: [],
+      userId: user.uid,
       timestamp,
-      };
+    };
     
-    // Optimistically update UI
-    setComments([...comments, newCommentObj]);
+    // Create new activity with a format compatible with Firestore
+    const activityId = `activity_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const newActivity = {
+      id: activityId,
+      userId: user.uid, 
+      userName: user.displayName || user.email || "Anonymous User",
+      userPhoto: user.photoURL || undefined,
+      action: "added a comment",
+      details: newComment.trim(),
+      timestamp: new Date(),
+    };
+    
+    // Update comments and activities state optimistically
+    const updatedComments = [...comments, newCommentObj];
+    const updatedActivities = [newActivity, ...activities];
+    
+    setComments(updatedComments);
+    setActivities(updatedActivities);
     setNewComment("");
     
-    // Maximum retries for network errors
-    const maxRetries = 2;
-    let retryCount = 0;
-    let success = false;
-    
-    while (retryCount <= maxRetries && !success) {
-      try {
-        if (!image.id) {
-          throw new Error("Cannot save comment: missing image ID");
-        }
-        
-        const updatedImage: ExtendedImageMeta = {
-          ...image,
-          comments: [...comments, newCommentObj],
-        };
-        
-        await onSave(updatedImage);
-        success = true;
-        
-        // Scroll to bottom of comments after a short delay
-        setTimeout(() => {
-          if (commentsContainerRef.current) {
-            commentsContainerRef.current.scrollTop = commentsContainerRef.current.scrollHeight;
-          }
-        }, 100);
-      } catch (error) {
-        retryCount++;
-        console.error(`Error posting comment (attempt ${retryCount}/${maxRetries}):`, error);
-        
-        if (retryCount <= maxRetries) {
-          // Wait before retry with exponential backoff
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
-          console.log(`Retrying comment post...`);
-        } else {
-          // Revert UI on final failure
-          setComments(previousComments);
-          setCommentError("Failed to post comment. Please try again.");
-          createSnack("Failed to post comment", "error");
-        }
+    try {
+      if (!image.id) {
+        throw new Error("Cannot save comment: missing image ID");
       }
+      
+      // Save the activity to the activities collection
+      const activityDocRef = doc(db, "images", image.id, "activities", activityId);
+      
+      // Format activity for Firestore
+      const firestoreActivity = {
+        ...newActivity,
+        imageId: image.id,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      };
+      
+      // Save activity
+      await setDoc(activityDocRef, firestoreActivity);
+      
+      // Create complete updated image with just the comments (no activities)
+      const updatedImage = {
+        ...image,
+        comments: updatedComments
+      };
+      
+      // Save to database through the main onSave handler
+      await onSave(updatedImage);
+      
+      // Scroll to bottom of comments
+      setTimeout(() => {
+        if (commentsContainerRef.current) {
+          commentsContainerRef.current.scrollTop = commentsContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    } catch (error) {
+      // Error handling with state reversion
+      console.error("Error posting comment:", error);
+      setComments(comments);
+      setActivities(activities);
+      setCommentError("Failed to post comment. Please try again.");
+      createSnack("Failed to post comment", "error");
+    } finally {
+      setIsPostingComment(false);
     }
-    
-    setIsPostingComment(false);
-  }, [newComment, image, user, comments, onSave, isPostingComment, createSnack]);
+  }, [newComment, image, user, comments, activities, onSave, isPostingComment, createSnack]);
   
   // Download thumbnail handler
     const handleThumbnailDownload = useCallback(async () => {
@@ -510,18 +535,50 @@ const ScrollHintIndicator: React.FC = () => (
       setIsDownloading(true);
     
     try {
+      // Extract the filename from the URL or use the image title with appropriate extension
+      const urlParts = image.url.split('/');
+      const filename = image.title 
+        ? `${image.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.jpg` 
+        : urlParts[urlParts.length - 1] || 'image.jpg';
+      
+      // Create an anchor element for the download
       const downloadLink = document.createElement('a');
       downloadLink.href = image.url;
-      downloadLink.download = image.title || 'image';
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+      downloadLink.setAttribute('download', filename);
+      downloadLink.setAttribute('target', '_blank');
+      downloadLink.setAttribute('rel', 'noopener noreferrer');
+      
+      // For direct download, we need to fetch the image as a blob
+      // This ensures the browser triggers a download instead of navigation
+      fetch(image.url)
+        .then(response => response.blob())
+        .then(blob => {
+          // Create a blob URL and set it as the href
+          const blobUrl = URL.createObjectURL(blob);
+          downloadLink.href = blobUrl;
+          
+          // Simulate a click to trigger the download
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          
+          // Clean up
+          document.body.removeChild(downloadLink);
+          URL.revokeObjectURL(blobUrl);
+          setIsDownloading(false);
+        })
+        .catch(error => {
+          console.error('Error fetching image for download:', error);
+          // Fallback to direct link if fetch fails
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          setIsDownloading(false);
+        });
     } catch (error) {
       console.error('Error downloading image:', error);
-      } finally {
-        setIsDownloading(false);
-      }
-    }, [image]);
+      setIsDownloading(false);
+    }
+  }, [image]);
   
   // Comment like toggle handler
     const toggleLike = useCallback(async (commentId: string) => {
@@ -826,75 +883,60 @@ const ScrollHintIndicator: React.FC = () => (
 
   // Handle image quick approval status change
   const handleApprovalChange = async (approved: boolean) => {
-    console.log("⚡ handleApprovalChange called with:", approved);
-    if (!image) {
-      console.error("Image missing");
-      createSnack('Cannot update: image data missing', 'error');
-      return;
-    }
+    if (!image || !user || isApprovalLoading) return;
     
-    console.log("Image object:", image);
-    
-    // Check for onSave callback first
-    if (!onSave) {
-      console.error("onSave callback is missing");
-      createSnack('Cannot update: save function missing', 'error');
-      return;
-    }
-    
-    // Store original state to revert if needed
-    const originalApprovalState = localApprovalState;
-    
-    // Update local state immediately for responsive UI
-    console.log("Setting localApprovalState to:", approved);
-    setLocalApprovalState(approved);
     setIsApprovalLoading(true);
+    setLocalApprovalState(approved);
     
-    // Maximum retries for network errors
-    const maxRetries = 2;
-    let retryCount = 0;
-    let success = false;
+    const oldActivities = [...activities];
     
-    while (retryCount <= maxRetries && !success) {
-      try {
-        // Create updated image with new status
-        const newStatus = approved ? "Approved" : "Ready for Approval";
-        console.log("Setting new status to:", newStatus);
-        
-        // Create a copy with the label updated
-        const updatedImage = {
-          ...image,
-          label: newStatus,
-          lastStatusChange: new Date(), // Add timestamp for tracking status changes
-        };
-        
-        // Let the parent component handle the saving
-        await onSave(updatedImage);
-        console.log("Image status updated successfully");
-        success = true;
-        
-        // Show success message
-        createSnack(
-          `Image ${approved ? 'approved' : 'set to Ready for Approval'}`, 
-          'success'
-        );
-      } catch (error) {
-        retryCount++;
-        console.error(`❌ Error updating approval status (attempt ${retryCount}/${maxRetries}):`, error);
-        
-        if (retryCount <= maxRetries) {
-          // Wait before retry with exponential backoff
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
-          console.log(`Retrying approval update...`);
-        } else {
-          // Revert local state on final error
-          setLocalApprovalState(originalApprovalState);
-          createSnack('Failed to update approval status', 'error');
-        }
-      }
+    // Create new activity for approval change
+    const activityId = `activity_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const newActivity = {
+      id: activityId,
+      userId: user.uid,
+      userName: user.displayName || "Unknown User",
+      userPhoto: user.photoURL || undefined,
+      action: approved ? "approved the content" : "marked content for revision",
+      timestamp: new Date(),
+    };
+    
+    // Update activities state optimistically
+    const updatedActivities = [newActivity, ...activities];
+    setActivities(updatedActivities);
+    
+    try {
+      // Save the activity to the activities collection
+      const activityDocRef = doc(db, "images", image.id, "activities", activityId);
+      
+      // Format activity for Firestore
+      const firestoreActivity = {
+        ...newActivity,
+        imageId: image.id,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      };
+      
+      // Save activity
+      await setDoc(activityDocRef, firestoreActivity);
+      
+      // Create updated image with new approval state only (no activities)
+      const updatedImage = {
+        ...image,
+        label: approved ? "Approved" : "Needs Revision"
+      };
+      
+      // Save through the parent component's onSave handler
+      await onSave(updatedImage);
+      createSnack(approved ? "Content approved" : "Content marked for revision", "success");
+    } catch (error) {
+      console.error("Error updating approval status:", error);
+      setLocalApprovalState(!approved);
+      setActivities(oldActivities);
+      createSnack("Failed to update approval status", "error");
+    } finally {
+      setIsApprovalLoading(false);
     }
-    
-    setIsApprovalLoading(false);
   };
 
   // Use effect to log approval state changes
@@ -909,13 +951,15 @@ const ScrollHintIndicator: React.FC = () => (
     }
   }, [visible, image, localApprovalState]);
 
-  // Debug effect to log image properties
+  // Debug effect to log image properties including activities
   useEffect(() => {
     if (image) {
-      console.log("Image object:", {
+      console.log("Image object loaded:", {
         id: image.id,
         hasProjectId: 'projectId' in image,
-        properties: Object.keys(image)
+        properties: Object.keys(image),
+        activities: image.activities || [],
+        activitiesCount: (image.activities || []).length
       });
     }
   }, [image]);
@@ -1173,12 +1217,169 @@ const ScrollHintIndicator: React.FC = () => (
     }
   };
 
+  // Add a new downloadVideo function
+  const handleVideoDownload = useCallback(async (videoUrl: string) => {
+    if (!videoUrl) return;
+    
+    setIsDownloading(true);
+    
+    try {
+      // Process Google Drive links if needed
+      const processedUrl = videoUrl.includes("drive.google.com")
+        ? getDirectDownloadLink(videoUrl)
+        : videoUrl;
+      
+      // Extract filename from URL or use a default
+      const urlParts = processedUrl.split('/');
+      const filename = image?.title 
+        ? `${image.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4` 
+        : urlParts[urlParts.length - 1] || 'video.mp4';
+      
+      // Create download link
+      const downloadLink = document.createElement('a');
+      downloadLink.href = processedUrl;
+      downloadLink.setAttribute('download', filename);
+      downloadLink.setAttribute('target', '_blank');
+      downloadLink.setAttribute('rel', 'noopener noreferrer');
+      
+      // Append to document and click
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    } catch (error) {
+      console.error('Error downloading video:', error);
+      createSnack("Failed to download video", "error");
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [image, createSnack]);
+
+  // Add debug logging for activities
+  useEffect(() => {
+    console.log('Current activities:', activities);
+  }, [activities]);
+
+  // Update logActivity function to use a dedicated activities collection
+  const logActivity = async (action: string, details?: string) => {
+    console.log("logActivity called with:", { action, details });
+    if (!user || !image) {
+      console.error("logActivity: Missing user or image data");
+      return;
+    }
+
+    try {
+      // Create a new activity with a unique ID
+      const newActivity: Activity = {
+        id: `activity_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        userId: user.uid,
+        userName: user.displayName || 'Unknown User',
+        userPhoto: user.photoURL || undefined,
+        action,
+        details,
+        timestamp: new Date(),
+      };
+
+      console.log("Creating new activity:", newActivity);
+      
+      // Create updated activities array with the new entry at the beginning
+      const currentActivities = Array.isArray(activities) ? activities : [];
+      const updatedActivities = [newActivity, ...currentActivities];
+      
+      // Debug logging
+      console.log("Previous activities count:", currentActivities.length);
+      console.log("Updated activities count:", updatedActivities.length);
+      
+      // Update local state first (optimistic update)
+      setActivities(updatedActivities);
+
+      // Use proper Firestore subcollection path
+      // Format: /images/{imageId}/activities/{activityId}
+      const activityDocRef = doc(db, "images", image.id, "activities", newActivity.id);
+      
+      // Convert timestamp for Firestore
+      const firestoreActivity = {
+        ...newActivity,
+        imageId: image.id,
+        timestamp: serverTimestamp(), // Use server timestamp for more accurate timing
+        createdAt: serverTimestamp()
+      };
+      
+      // Save the activity to Firestore
+      await setDoc(activityDocRef, firestoreActivity);
+      
+      console.log("Activity logged successfully to separate collection");
+      
+      // No need to update the image metadata since activities are stored separately
+    } catch (error) {
+      console.error('Error logging activity:', error);
+      // Revert local state if save fails
+      setActivities(Array.isArray(activities) ? activities : []);
+    }
+  };
+
+  // Function to fetch activities from Firestore
+  const fetchActivities = async (imageId: string) => {
+    if (!imageId) {
+      console.error("Cannot fetch activities: No image ID provided");
+      setActivities([]);
+      return;
+    }
+    
+    try {
+      console.log(`Fetching activities for image: ${imageId}`);
+      
+      // Use the correct subcollection path pattern for Firestore
+      // Format: /images/{imageId}/activities
+      const activitiesCollectionRef = collection(db, "images", imageId, "activities");
+      
+      // Create a query to sort by timestamp (newest first)
+      const q = query(
+        activitiesCollectionRef,
+        orderBy('timestamp', 'desc')
+      );
+      
+      // Get the activities
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.log("No activities found for this image");
+        setActivities([]);
+        return;
+      }
+      
+      // Parse the activities
+      const fetchedActivities: Activity[] = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        // Convert Firestore timestamp to JS Date
+        const timestamp = data.timestamp ? 
+          (data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp)) : 
+          new Date();
+          
+        return {
+          id: doc.id,
+          userId: data.userId || '',
+          userName: data.userName || 'Unknown User',
+          userPhoto: data.userPhoto,
+          action: data.action || '',
+          details: data.details,
+          timestamp
+        };
+      });
+      
+      console.log(`Fetched ${fetchedActivities.length} activities`);
+      setActivities(fetchedActivities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      setActivities([]);
+    }
+  };
+
   // If not visible, render nothing
   if (!visible) return null;
   
     return (
     <Dialog open={visible} onOpenChange={(open) => !open && handleCloseWithCheck()}>
-      <DialogContent className="max-w-[98vw] max-h-[90vh] w-[1600px] p-0 overflow-hidden">
+      <DialogContent className="max-w-[99vw] max-h-[98vh] w-[1600px] p-0 overflow-hidden flex flex-col shadow-lg border-0 rounded-lg">
         <style jsx>{`
           /* Force override any table display in first column */
           :global([data-radix-scroll-area-viewport]) {
@@ -1198,6 +1399,16 @@ const ScrollHintIndicator: React.FC = () => (
           
           :global([role="dialog"] > button) {
             display: none !important;
+          }
+
+          /* More compact card headers */
+          :global(.CardHeader) {
+            padding: 8px 12px !important;
+          }
+
+          /* Tighter content padding */
+          :global(.CardContent) {
+            padding: 10px !important;
           }
         `}</style>
         
@@ -1238,27 +1449,27 @@ const ScrollHintIndicator: React.FC = () => (
           isLoading={isDeleting}
         />
         
-        <DialogHeader className="px-6 py-3 border-b bg-muted/40">
+        <DialogHeader className="px-3 py-1.5 border-b bg-muted/40 flex-none">
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="flex flex-col">
                 {currentInstance && (
                   <div className="flex items-center gap-2">
-                    <div className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                    <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       {socialMediaConfig[currentInstance]?.name || currentInstance}
                     </div>
                     {image?.timestamp && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {formatDateString(image.timestamp)}
                       </div>
                     )}
                     {image?.location && !image?.timestamp && image.location !== 'pool' && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {formatDateString(image.location)}
                       </div>
                     )}
                     {image?.location === 'pool' && !image?.timestamp && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         Content Pool
                       </div>
                     )}
@@ -1285,9 +1496,9 @@ const ScrollHintIndicator: React.FC = () => (
                   {/* Add delete button with trash icon */}
                   {onDelete && (
                     <Button
-                      variant="destructive"
+                      variant="outline"
                       size="sm"
-                      className="rounded-full w-9 h-9 p-0 bg-red-500 hover:bg-red-600 text-white"
+                      className="rounded-full w-9 h-9 p-0 border-muted-foreground/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
                       onClick={handleDeleteClick}
                       disabled={isSaving || isApprovalLoading || isDeleting}
                       title="Delete content"
@@ -1403,17 +1614,146 @@ const ScrollHintIndicator: React.FC = () => (
           </div>
         </DialogHeader>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={editing ? "editing" : "viewing"}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-          {editing ? (
-              <form id="detailsForm" ref={formRef} onSubmit={handleSubmit} className="flex flex-1 overflow-hidden h-[calc(90vh-100px)]">
-                <div className="grid grid-cols-3 h-full divide-x">
+        {/* Main content area with flex-grow-1 to take available space */}
+        <div className="flex-grow overflow-hidden relative">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={editing ? "editing" : "viewing"}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+              className="h-full"
+            >
+              {editing ? (
+                <form id="detailsForm" ref={formRef} onSubmit={handleSubmit} className="flex flex-1 overflow-hidden h-[calc(98vh-180px)]">
+                  <div className="grid grid-cols-[30%_40%_30%] w-full divide-x">
+                    {/* Left Column - Details */}
+                    <div className="h-full overflow-hidden">
+                      <RenderFirstColumn
+                        image={image}
+                        editing={editing}
+                        descText={descText}
+                        setDescText={setDescText}
+                        captionText={captionText}
+                        setCaptionText={setCaptionText}
+                        descExpanded={descExpanded}
+                        setDescExpanded={setDescExpanded}
+                        captionExpanded={captionExpanded}
+                        setCaptionExpanded={setCaptionExpanded}
+                        comments={comments}
+                        setComments={setComments}
+                        newComment={newComment}
+                        setNewComment={setNewComment}
+                        handlePostComment={handlePostComment}
+                        toggleLike={toggleLike}
+                        deleteComment={deleteComment}
+                        attachments={attachments}
+                        setAttachments={setAttachments}
+                        editContentType={editContentType}
+                        setEditContentType={setEditContentType}
+                        attachmentInputLocalRef={attachmentInputLocalRef}
+                        processAttachmentFilesForEdit={processAttachmentFilesForEdit}
+                        commentsContainerRef={commentsContainerRef}
+                        firstColumnRef={firstColumnRef}
+                        showScrollIndicator={showScrollIndicator}
+                        user={user}
+                      />
+                    </div>
+
+                    {/* Middle Column - Content Preview */}
+                    <div className="h-full overflow-hidden bg-muted/5 border-r border-border/50">
+                      <div className="p-3 h-full">
+                        <Card className="h-full border-none overflow-hidden shadow-sm">
+                          <CardHeader className="py-2 bg-muted/40 border-b">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-xs font-medium flex items-center">
+                                <ViewColumnsIcon className="h-4 w-4 mr-1.5 text-primary" />
+                                Content Preview
+                                <span className="ml-2 font-normal text-muted-foreground">|</span>
+                                <span className="ml-1.5 capitalize flex items-center">
+                                  {currentContentType === 'photo' && <PhotoIcon className="h-3.5 w-3.5 text-blue-500 mr-1" />}
+                                  {currentContentType === 'video' && <VideoCameraIcon className="h-3.5 w-3.5 text-purple-500 mr-1" />}
+                                  {currentContentType === 'reel' && <VideoCameraIcon className="h-3.5 w-3.5 text-pink-500 mr-1" />}
+                                  {currentContentType === 'carousel' && <ViewColumnsIcon className="h-3.5 w-3.5 text-orange-500 mr-1" />}
+                                  {currentContentType}
+                                </span>
+                              </CardTitle>
+                              
+                              {/* Download button for videos/reels */}
+                              {(currentContentType === 'video' || currentContentType === 'reel') && image?.videoEmbed && !editing && (
+                                <button
+                                  onClick={() => handleVideoDownload(image.videoEmbed || '')}
+                                  className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                  disabled={isDownloading}
+                                >
+                                  <span>{isDownloading ? "..." : "Download"}</span>
+                                  <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                                </button>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-0 h-[calc(100%-48px)] flex items-center justify-center bg-background/60">
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.1 }}
+                              className="w-full h-full flex items-center justify-center overflow-auto p-5"
+                            >
+                              <div className="w-full h-full">
+                                <RenderSecondColumn
+                                  currentType={currentContentType}
+                                  image={image}
+                                  projectId=""
+                                  editing={editing}
+                                  onCarouselArrangementSave={handleCarouselArrangementSave}
+                                />
+                              </div>
+                            </motion.div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+
+                    {/* Right Column - Thumbnail */}
+                    <div className="h-full overflow-hidden bg-muted/10">
+                      <div className="p-4 h-full">
+                        <Card className="h-full border-none overflow-hidden shadow-sm">
+                          <CardHeader className="py-2 bg-muted/40 border-b">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-xs font-medium flex items-center">
+                                <PhotoIcon className="h-4 w-4 mr-1.5 text-primary" />
+                                {editing ? "Change Thumbnail" : "Thumbnail"}
+                              </CardTitle>
+                              {image?.url && !editing && (
+                                <button
+                                  onClick={handleThumbnailDownload}
+                                  className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                  disabled={isDownloading}
+                                >
+                                  {isDownloading ? "..." : <span>Download</span>}
+                                  <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                                </button>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-4 h-[calc(100%-48px)]">
+                            <RenderThirdColumn
+                              image={image}
+                              editing={editing}
+                              isUploadingPhoto={isUploadingPhoto}
+                              triggerPhotoUpload={triggerPhotoUpload}
+                              isDownloading={isDownloading}
+                              handleThumbnailDownload={handleThumbnailDownload}
+                            />
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <div className="grid grid-cols-[30%_40%_30%] divide-x h-[calc(98vh-180px)]">
                   {/* Left Column - Details */}
                   <div className="h-full overflow-hidden">
                     <RenderFirstColumn
@@ -1449,40 +1789,35 @@ const ScrollHintIndicator: React.FC = () => (
 
                   {/* Middle Column - Content Preview */}
                   <div className="h-full overflow-hidden bg-muted/5 border-r border-border/50">
-                    <div className="p-4 h-full">
+                    <div className="p-3 h-full">
                       <Card className="h-full border-none overflow-hidden shadow-sm">
-                        <CardHeader className="py-3 bg-muted/40 border-b">
+                        <CardHeader className="py-2 bg-muted/40 border-b">
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium flex items-center">
-                              <ViewColumnsIcon className="h-5 w-5 mr-2 text-primary" />
+                            <CardTitle className="text-xs font-medium flex items-center">
+                              <ViewColumnsIcon className="h-4 w-4 mr-1.5 text-primary" />
                               Content Preview
                               <span className="ml-2 font-normal text-muted-foreground">|</span>
-                              <span className="ml-2 capitalize flex items-center">
-                                {currentContentType === 'photo' && <PhotoIcon className="h-4 w-4 text-blue-500 mr-1" />}
-                                {currentContentType === 'video' && <VideoCameraIcon className="h-4 w-4 text-purple-500 mr-1" />}
-                                {currentContentType === 'reel' && <VideoCameraIcon className="h-4 w-4 text-pink-500 mr-1" />}
-                                {currentContentType === 'carousel' && <ViewColumnsIcon className="h-4 w-4 text-orange-500 mr-1" />}
+                              <span className="ml-1.5 capitalize flex items-center">
+                                {currentContentType === 'photo' && <PhotoIcon className="h-3.5 w-3.5 text-blue-500 mr-1" />}
+                                {currentContentType === 'video' && <VideoCameraIcon className="h-3.5 w-3.5 text-purple-500 mr-1" />}
+                                {currentContentType === 'reel' && <VideoCameraIcon className="h-3.5 w-3.5 text-pink-500 mr-1" />}
+                                {currentContentType === 'carousel' && <ViewColumnsIcon className="h-3.5 w-3.5 text-orange-500 mr-1" />}
                                 {currentContentType}
                               </span>
                             </CardTitle>
                             
                             {/* Download button for videos/reels */}
                             {(currentContentType === 'video' || currentContentType === 'reel') && image?.videoEmbed && !editing && (
-                              <a
-                                href={
-                                  image.videoEmbed.includes("drive.google.com")
-                                    ? getDirectDownloadLink(image.videoEmbed)
-                                    : image.videoEmbed
-                                }
-                                download=""
-                                target="_self"
-                                className="rounded-lg bg-gray-700 px-2 py-1 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                              <button
+                                onClick={() => handleVideoDownload(image.videoEmbed || '')}
+                                className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                disabled={isDownloading}
                               >
-                                <span>Download</span>
-                                <ArrowDownTrayIcon className="h-3 w-3 ml-2" />
-                              </a>
+                                <span>{isDownloading ? "..." : "Download"}</span>
+                                <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                              </button>
                             )}
-                </div>
+                          </div>
                         </CardHeader>
                         <CardContent className="p-0 h-[calc(100%-48px)] flex items-center justify-center bg-background/60">
                           <motion.div 
@@ -1492,13 +1827,13 @@ const ScrollHintIndicator: React.FC = () => (
                             className="w-full h-full flex items-center justify-center overflow-auto p-5"
                           >
                             <div className="w-full h-full">
-                <RenderSecondColumn
-                  currentType={currentContentType}
-                  image={image}
-                  projectId=""
-                  editing={editing}
-                  onCarouselArrangementSave={handleCarouselArrangementSave}
-                />
+                              <RenderSecondColumn
+                                currentType={currentContentType}
+                                image={image}
+                                projectId=""
+                                editing={editing}
+                                onCarouselArrangementSave={handleCarouselArrangementSave}
+                              />
                             </div>
                           </motion.div>
                         </CardContent>
@@ -1510,189 +1845,52 @@ const ScrollHintIndicator: React.FC = () => (
                   <div className="h-full overflow-hidden bg-muted/10">
                     <div className="p-4 h-full">
                       <Card className="h-full border-none overflow-hidden shadow-sm">
-                        <CardHeader className="py-3 bg-muted/40 border-b">
+                        <CardHeader className="py-2 bg-muted/40 border-b">
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium flex items-center">
-                              <PhotoIcon className="h-5 w-5 mr-2 text-primary" />
+                            <CardTitle className="text-xs font-medium flex items-center">
+                              <PhotoIcon className="h-4 w-4 mr-1.5 text-primary" />
                               {editing ? "Change Thumbnail" : "Thumbnail"}
                             </CardTitle>
                             {image?.url && !editing && (
                               <button
                                 onClick={handleThumbnailDownload}
-                                className="rounded-lg bg-gray-700 px-2 py-1 text-xs text-white hover:opacity-90 transition-opacity select-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 focus:outline-none flex justify-between items-center"
+                                className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
                                 disabled={isDownloading}
-                                aria-busy={isDownloading}
-                                aria-label={isDownloading ? "Downloading image..." : "Download image"}
                               >
-                                {isDownloading ? "Downloading..." : <span>Download</span>}
-                                <ArrowDownTrayIcon className="h-3 w-3 ml-2" />
+                                {isDownloading ? "..." : <span>Download</span>}
+                                <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
                               </button>
                             )}
                           </div>
                         </CardHeader>
                         <CardContent className="p-4 h-[calc(100%-48px)]">
-                <RenderThirdColumn
-                  image={image}
-                  editing={editing}
-                  isUploadingPhoto={isUploadingPhoto}
-                  triggerPhotoUpload={triggerPhotoUpload}
-                  isDownloading={isDownloading}
-                  handleThumbnailDownload={handleThumbnailDownload}
-                />
+                          <RenderThirdColumn
+                            image={image}
+                            editing={editing}
+                            isUploadingPhoto={isUploadingPhoto}
+                            triggerPhotoUpload={triggerPhotoUpload}
+                            isDownloading={isDownloading}
+                            handleThumbnailDownload={handleThumbnailDownload}
+                          />
                         </CardContent>
                       </Card>
-              </div>
-                  </div>
-                  </div>
-
-                <input
-                  type="file"
-                  ref={photoInputRef}
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                      handlePhotoChange(e.target.files[0]);
-                    }
-                  }}
-                  className="hidden"
-                  accept="image/*"
-                />
-              </form>
-            ) : (
-              <div className="grid grid-cols-3 h-[calc(90vh-100px)] overflow-hidden divide-x">
-                {/* Left Column - Details */}
-                <div className="h-full overflow-hidden">
-                  <RenderFirstColumn
-                    image={image}
-                    editing={editing}
-                    descText={descText}
-                    setDescText={setDescText}
-                    captionText={captionText}
-                    setCaptionText={setCaptionText}
-                    descExpanded={descExpanded}
-                    setDescExpanded={setDescExpanded}
-                    captionExpanded={captionExpanded}
-                    setCaptionExpanded={setCaptionExpanded}
-                  comments={comments}
-                    setComments={setComments}
-                  newComment={newComment}
-                  setNewComment={setNewComment}
-                  handlePostComment={handlePostComment}
-                  toggleLike={toggleLike}
-                  deleteComment={deleteComment}
-                    attachments={attachments}
-                    setAttachments={setAttachments}
-                    editContentType={editContentType}
-                    setEditContentType={setEditContentType}
-                    attachmentInputLocalRef={attachmentInputLocalRef}
-                    processAttachmentFilesForEdit={processAttachmentFilesForEdit}
-                  commentsContainerRef={commentsContainerRef}
-                    firstColumnRef={firstColumnRef}
-                    showScrollIndicator={showScrollIndicator}
-                    user={user}
-                />
-              </div>
-
-                {/* Middle Column - Content Preview */}
-                <div className="h-full overflow-hidden bg-muted/5 border-r border-border/50">
-                  <div className="p-4 h-full">
-                    <Card className="h-full border-none overflow-hidden shadow-sm">
-                      <CardHeader className="py-3 bg-muted/40 border-b">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm font-medium flex items-center">
-                            <ViewColumnsIcon className="h-5 w-5 mr-2 text-primary" />
-                            Content Preview
-                            <span className="ml-2 font-normal text-muted-foreground">|</span>
-                            <span className="ml-2 capitalize flex items-center">
-                              {currentContentType === 'photo' && <PhotoIcon className="h-4 w-4 text-blue-500 mr-1" />}
-                              {currentContentType === 'video' && <VideoCameraIcon className="h-4 w-4 text-purple-500 mr-1" />}
-                              {currentContentType === 'reel' && <VideoCameraIcon className="h-4 w-4 text-pink-500 mr-1" />}
-                              {currentContentType === 'carousel' && <ViewColumnsIcon className="h-4 w-4 text-orange-500 mr-1" />}
-                              {currentContentType}
-                            </span>
-                          </CardTitle>
-                          
-                          {/* Download button for videos/reels */}
-                          {(currentContentType === 'video' || currentContentType === 'reel') && image?.videoEmbed && !editing && (
-                            <a
-                              href={
-                                image.videoEmbed.includes("drive.google.com")
-                                  ? getDirectDownloadLink(image.videoEmbed)
-                                  : image.videoEmbed
-                              }
-                              download=""
-                              target="_self"
-                              className="rounded-lg bg-gray-700 px-2 py-1 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
-                            >
-                              <span>Download</span>
-                              <ArrowDownTrayIcon className="h-3 w-3 ml-2" />
-                            </a>
-                          )}
-              </div>
-                      </CardHeader>
-                      <CardContent className="p-0 h-[calc(100%-48px)] flex items-center justify-center bg-background/60">
-                        <motion.div 
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.1 }}
-                          className="w-full h-full flex items-center justify-center overflow-auto p-5"
-                        >
-                          <div className="w-full h-full">
-                <RenderSecondColumn
-                  currentType={currentContentType}
-                  image={image}
-                  projectId=""
-                  editing={editing}
-                  onCarouselArrangementSave={handleCarouselArrangementSave}
-                />
-                          </div>
-                        </motion.div>
-                      </CardContent>
-                    </Card>
+                    </div>
                   </div>
                 </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+          
+        {/* Activity Log - Make it stand out more with stronger styling */}
+        <div className="flex-none w-full border-t border-primary/20 bg-primary/5">
+          <ActivityLog
+            activities={activities}
+            isExpanded={isActivityExpanded}
+            onToggle={() => setIsActivityExpanded(!isActivityExpanded)}
+          />
+        </div>
 
-                {/* Right Column - Thumbnail */}
-                <div className="h-full overflow-hidden bg-muted/10">
-                  <div className="p-4 h-full">
-                    <Card className="h-full border-none overflow-hidden shadow-sm">
-                      <CardHeader className="py-3 bg-muted/40 border-b">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm font-medium flex items-center">
-                            <PhotoIcon className="h-5 w-5 mr-2 text-primary" />
-                            {editing ? "Change Thumbnail" : "Thumbnail"}
-                          </CardTitle>
-                          {image?.url && !editing && (
-                            <button
-                              onClick={handleThumbnailDownload}
-                              className="rounded-lg bg-gray-700 px-2 py-1 text-xs text-white hover:opacity-90 transition-opacity select-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 focus:outline-none flex justify-between items-center"
-                              disabled={isDownloading}
-                              aria-busy={isDownloading}
-                              aria-label={isDownloading ? "Downloading image..." : "Download image"}
-                            >
-                              {isDownloading ? "Downloading..." : <span>Download</span>}
-                              <ArrowDownTrayIcon className="h-3 w-3 ml-2" />
-                            </button>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-4 h-[calc(100%-48px)]">
-                <RenderThirdColumn
-                  image={image}
-                  editing={editing}
-                  isUploadingPhoto={isUploadingPhoto}
-                  triggerPhotoUpload={triggerPhotoUpload}
-                  isDownloading={isDownloading}
-                  handleThumbnailDownload={handleThumbnailDownload}
-                />
-                      </CardContent>
-                    </Card>
-                  </div>
-              </div>
-            </div>
-          )}
-          </motion.div>
-        </AnimatePresence>
-        
         {isDownloading && (
           <motion.div 
             initial={{ opacity: 0 }}
@@ -1704,17 +1902,17 @@ const ScrollHintIndicator: React.FC = () => (
           </motion.div>
         )}
 
-          <input
-            type="file"
-            ref={photoInputRef}
-            onChange={(e) => {
+        <input
+          type="file"
+          ref={photoInputRef}
+          onChange={(e) => {
             if (e.target.files?.[0]) {
-                handlePhotoChange(e.target.files[0]);
-              }
-            }}
+              handlePhotoChange(e.target.files[0]);
+            }
+          }}
           className="hidden"
           accept="image/*"
-          />
+        />
       </DialogContent>
     </Dialog>
     );

@@ -838,8 +838,11 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
           selectedProjectId,
           imageId,
           user.displayName || user.email || 'A user',
+          user.uid,
           currentStatus || '',
           newStatus,
+          imageMetadata[imageId]?.title || 'Untitled',
+          imageMetadata[imageId]?.location,
           activeInstance
         );
       }
@@ -1135,19 +1138,20 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
     };
   }, [activeInstance]);
 
-  // Add notification to handleComment function (if it exists)
+  // Fix handleComment function
   const handleComment = async (imageId: string, comment: string) => {
     if (!projectId || !user) return;
     
     try {
-      // Existing comment logic...
-      
       // Add notification after successful comment
       await createCommentNotification(
         selectedProjectId,
         imageId,
         user.displayName || user.email || 'A user',
+        user.uid,
         comment,
+        imageMetadata[imageId]?.title || 'Untitled',
+        imageMetadata[imageId]?.location,
         activeInstance
       );
     } catch (error) {
@@ -1155,7 +1159,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
     }
   };
 
-  // Add notification to status change function (if it exists)
+  // Fix handleStatusChange function
   const handleStatusChange = async (imageId: string, newStatus: string) => {
     if (!projectId || !user) return;
     
@@ -1174,8 +1178,11 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
           selectedProjectId,
           imageId,
           user.displayName || user.email || 'A user',
+          user.uid,
           oldStatus,
           newStatus,
+          imageMetadata[imageId]?.title || 'Untitled',
+          imageMetadata[imageId]?.location,
           activeInstance
         );
       }
@@ -1385,7 +1392,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
                   >
                     Logout
                   </button>
-                </div>
+          </div>
               )}
             </div>
           </div>
@@ -1592,9 +1599,12 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
                         selectedProjectId,
                         currentDetailsId,
                         user.displayName || user.email || 'A user',
+                        user.uid,
                         latestComment.text,
+                        imageMetadata[currentDetailsId]?.title || 'Untitled',
+                        imageMetadata[currentDetailsId]?.location,
                         activeInstance
-                      ).catch(error => {
+                      ).catch((error: Error) => {
                         console.error('Error creating notification for comment:', error);
                       });
                     }
@@ -1603,9 +1613,12 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
                       selectedProjectId,
                       currentDetailsId,
                       user.displayName || user.email || 'A user',
+                      user.uid,
                       ['content details'],
+                      imageMetadata[currentDetailsId]?.title || 'Untitled',
+                      imageMetadata[currentDetailsId]?.location,
                       activeInstance
-                    ).catch(error => {
+                    ).catch((error: Error) => {
                       console.error('Error creating notification for content update:', error);
                     });
                   }
