@@ -16,6 +16,9 @@ import {
   doc,
   updateDoc,
   arrayUnion,
+  getDoc,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/components/services/firebaseService";
 import Link from "next/link";
@@ -169,6 +172,57 @@ function DashboardContent() {
         members: arrayUnion(newMember),
         memberIds: arrayUnion(newMember.uid),
       });
+
+      // Update group chat to include the new member
+      const groupChatId = `group_${activeProjectId}`;
+      const conversationRef = doc(db, `projects/${activeProjectId}/conversations`, groupChatId);
+      
+      // Get the current conversation data
+      const conversationDoc = await getDoc(conversationRef);
+      
+      if (conversationDoc.exists()) {
+        // Update existing group chat
+        await updateDoc(conversationRef, {
+          participantIds: arrayUnion(newMember.uid),
+          participants: arrayUnion({
+            id: newMember.uid,
+            name: newMember.displayName,
+            email: newMember.email,
+            photoURL: newMember.photoURL
+          }),
+          [`unreadCount.${newMember.uid}`]: 0
+        });
+      } else {
+        // Create new group chat if it doesn't exist
+        await setDoc(conversationRef, {
+          isGroupChat: true,
+          participantIds: [user.uid, newMember.uid],
+          participants: [
+            {
+              id: user.uid,
+              name: user.displayName || user.email,
+              email: user.email,
+              photoURL: user.photoURL
+            },
+            {
+              id: newMember.uid,
+              name: newMember.displayName,
+              email: newMember.email,
+              photoURL: newMember.photoURL
+            }
+          ],
+          groupName: `${activeProject?.name || 'Project'} Group`,
+          createdAt: serverTimestamp(),
+          lastMessageAt: serverTimestamp(),
+          lastMessage: 'Welcome to the group chat!',
+          lastMessageSeen: true,
+          unreadCount: {
+            [user.uid]: 0,
+            [newMember.uid]: 0
+          }
+        });
+      }
+      
       console.log("Member successfully added:", newMember.email);
     } catch (error) {
       console.error("Error adding member:", error);

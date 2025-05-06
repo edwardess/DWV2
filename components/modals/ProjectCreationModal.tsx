@@ -2,7 +2,7 @@
 
 "use client";
 import React, { useState, FormEvent } from "react";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, addDoc, collection } from "firebase/firestore";
 import { db } from "@/components/services/firebaseService";
 import Modal from "@/components/common/modals/Modal";
 import { useAuth } from "@/components/services/AuthProvider";
@@ -11,6 +11,7 @@ interface ProjectUser {
   uid: string;
   email: string;
   displayName: string;
+  photoURL?: string;
 }
 
 interface ProjectCreationModalProps {
@@ -33,40 +34,55 @@ export default function ProjectCreationModal({
     e.preventDefault();
     if (!user) return;
 
-    const projectId = crypto.randomUUID();
     try {
-      const ownerObj = {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email,
-      };
-      // Use the real member object (with its uid from the "users" collection)
-      const invitedMember = {
-        uid: member.uid,
-        email: member.email,
-        displayName: member.displayName,
-      };
-
-      const membersArray = [ownerObj, invitedMember];
-      const memberIdsArray = [user.uid, member.uid];
-
-      await setDoc(doc(db, "projects", projectId), {
-        projectName,
-        owner: ownerObj,
-        members: membersArray,
-        memberIds: memberIdsArray,
+      const projectRef = await addDoc(collection(db, "projects"), {
+        name: projectName,
+        members: [
+          {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+          },
+          member,
+        ],
+        memberIds: [user.uid, member.uid],
         createdAt: serverTimestamp(),
-        imageMetadata: {
-          fbig: {},
-          tiktok: {},
-        },
-        droppedImages: {
-          fbig: {},
-          tiktok: {},
-        },
       });
 
-      onProjectCreated(projectId, projectName);
+      // Initialize the group chat
+      const groupChatId = `group_${projectRef.id}`;
+      const conversationRef = doc(db, `projects/${projectRef.id}/conversations`, groupChatId);
+      
+      await setDoc(conversationRef, {
+        isGroupChat: true,
+        participantIds: [user.uid, member.uid],
+        participants: [
+          {
+            id: user.uid,
+            name: user.displayName || user.email,
+            email: user.email,
+            photoURL: user.photoURL
+          },
+          {
+            id: member.uid,
+            name: member.displayName,
+            email: member.email,
+            photoURL: member.photoURL
+          }
+        ],
+        groupName: `${projectName} Group`,
+        createdAt: serverTimestamp(),
+        lastMessageAt: serverTimestamp(),
+        lastMessage: 'Welcome to the group chat!',
+        lastMessageSeen: true,
+        unreadCount: {
+          [user.uid]: 0,
+          [member.uid]: 0
+        }
+      });
+
+      onProjectCreated(projectRef.id, projectName);
       onClose();
     } catch (error) {
       console.error("Error creating project:", error);

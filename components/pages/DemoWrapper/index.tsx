@@ -169,6 +169,7 @@ export interface ImageMeta {
   comments?: any[]; // Ensure comments is always an array.
   id?: string;
   carouselArrangement?: CarouselPhoto[];
+  instance?: SocialMediaInstance; // Make instance optional
   [key: string]: any; // Allow indexed access for dynamic properties
 }
 
@@ -324,6 +325,76 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
     }
   }
 
+  // Simple force reload data function
+  const forceReloadData = async () => {
+    if (!selectedProjectId) return;
+    
+    setIsLoading(true);
+    try {
+      // Get fresh data from Firestore
+      const projectDocRef = doc(db, "projects", selectedProjectId);
+      const docSnap = await getDoc(projectDocRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const firestoreField = activeInstance === "facebook" ? "fbig" : activeInstance;
+        const instanceData = data.imageMetadata?.[firestoreField] || {};
+        
+        // Process the data manually
+        const normalizedData: { [id: string]: ImageMeta } = {};
+        
+        Object.entries(instanceData).forEach(([id, metaData]) => {
+          const meta = metaData as Record<string, any>;
+          
+          // Skip invalid entries early
+          if (!meta.url || !meta.title) {
+            console.warn(`Skipping invalid entry ${id}: missing url or title`);
+            return;
+          }
+          
+          // Process lastMoved date
+          const lastMoved = (() => {
+            if (!meta.lastMoved) return new Date();
+            if (typeof meta.lastMoved.toDate === "function") return meta.lastMoved.toDate();
+            if (meta.lastMoved instanceof Date) return meta.lastMoved;
+            try {
+              const date = new Date(meta.lastMoved);
+              return isNaN(date.getTime()) ? new Date() : date;
+            } catch {
+              return new Date();
+            }
+          })();
+              
+          normalizedData[id] = {
+            url: meta.url,
+            title: meta.title || '',
+            description: meta.description || '',
+            caption: meta.caption ?? '',
+            label: meta.label || '',
+            comment: meta.comment || '',
+            videoEmbed: meta.videoEmbed ?? '',
+            contentType: meta.contentType || '',
+            location: meta.location || 'pool',
+            lastMoved,
+            comments: Array.isArray(meta.comments) ? meta.comments : [],
+            carouselArrangement: Array.isArray(meta.carouselArrangement) ? meta.carouselArrangement : [],
+            attachments: Array.isArray(meta.attachments) ? meta.attachments : [],
+            id
+          };
+        });
+        
+        // Update state with the normalized data
+        setImageMetadata(normalizedData);
+        createSnack(`Content refreshed`, "success");
+      }
+    } catch (error) {
+      console.error("Error reloading data:", error);
+      createSnack("Failed to reload data", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Optimized Firebase listener with batching and debouncing
   useEffect(() => {
     if (!selectedProjectId) return;
@@ -341,11 +412,11 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
       if (!data) return;
       
       try {
-            const normalizedData: { [id: string]: ImageMeta } = {};
+        const normalizedData: { [id: string]: ImageMeta } = {};
             
         Object.entries(data).forEach(([id, metaData]) => {
-              const meta = metaData as Record<string, any>;
-              
+          const meta = metaData as Record<string, any>;
+          
           // Skip invalid entries early
           if (!meta.url || !meta.title) {
             console.warn(`Skipping invalid entry ${id}: missing url or title`);
@@ -357,33 +428,33 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
             if (!meta.lastMoved) return new Date();
             if (typeof meta.lastMoved.toDate === "function") return meta.lastMoved.toDate();
             if (meta.lastMoved instanceof Date) return meta.lastMoved;
-                  try {
+            try {
               const date = new Date(meta.lastMoved);
               return isNaN(date.getTime()) ? new Date() : date;
             } catch {
               return new Date();
-                }
+            }
           })();
               
-              normalizedData[id] = {
+          normalizedData[id] = {
             url: meta.url,
-                title: meta.title || '',
-                description: meta.description || '',
-                caption: meta.caption ?? '',
-                label: meta.label || '',
-                comment: meta.comment || '',
-                videoEmbed: meta.videoEmbed ?? '',
-                contentType: meta.contentType || '',
-                location: meta.location || 'pool',
+            title: meta.title || '',
+            description: meta.description || '',
+            caption: meta.caption ?? '',
+            label: meta.label || '',
+            comment: meta.comment || '',
+            videoEmbed: meta.videoEmbed ?? '',
+            contentType: meta.contentType || '',
+            location: meta.location || 'pool',
             lastMoved,
             comments: Array.isArray(meta.comments) ? meta.comments : [],
             carouselArrangement: Array.isArray(meta.carouselArrangement) ? meta.carouselArrangement : [],
             attachments: Array.isArray(meta.attachments) ? meta.attachments : [],
             id
-              };
-            });
+          };
+        });
             
-            setImageMetadata(normalizedData);
+        setImageMetadata(normalizedData);
         
         // Turn off loading only after data is processed
         if (isFirstLoad) {
@@ -393,7 +464,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
       } catch (error) {
         console.error('Error processing Firestore data:', error);
         setIsLoading(false);
-          }
+      }
     }, 150); // 150ms debounce
     
     const unsub = onSnapshot(
@@ -411,6 +482,8 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
           
           // Map UI instance to Firestore field
           const firestoreField = activeInstance === "facebook" ? "fbig" : activeInstance;
+          
+          // Make sure we access the data with the correct path
           instanceData = data.imageMetadata?.[firestoreField] || {};
           
           // Use debounced update
@@ -483,8 +556,9 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
 
     while (retryCount <= maxRetries && !success) {
       try {
-        // Performance optimization: Only get existing data if needed
+        // Get the current document to update it properly
         const projectDocRef = doc(db, "projects", selectedProjectId);
+        const docSnap = await getDoc(projectDocRef);
         
         // Determine the Firestore field to update based on active instance
         let firestoreInstance: string = activeInstance;
@@ -494,17 +568,33 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
           firestoreInstance = "fbig";
         }
         
-        // Create a shallower update object to reduce processing overhead
-        const updateObj = {
-          [`imageMetadata.${firestoreInstance}`]: sanitizedInstanceData
-        };
-        
-        // Use merge option to preserve other fields
-        await setDoc(projectDocRef, updateObj, { merge: true });
+        if (docSnap.exists()) {
+          // Document exists, update it with proper structure
+          const data = docSnap.data();
+          const imageMetadataData = data.imageMetadata || {};
+          
+          // Create updated imageMetadata with new instance data
+          const updatedData = {
+            ...imageMetadataData,
+            [firestoreInstance]: sanitizedInstanceData
+          };
+          
+          // Update just the imageMetadata field
+          await updateDoc(projectDocRef, {
+            imageMetadata: updatedData
+          });
+        } else {
+          // Document doesn't exist, create it with the proper structure
+          await setDoc(projectDocRef, {
+            imageMetadata: {
+              [firestoreInstance]: sanitizedInstanceData
+            },
+            createdAt: serverTimestamp()
+          });
+        }
         
         // Update local state 
         setImageMetadata(sanitizedInstanceData);
-        console.log(`Updated image metadata for ${activeInstance} instance (saved to ${firestoreInstance})`);
         success = true;
       } catch (error) {
         retryCount++;
@@ -606,22 +696,40 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
     createSnack(`Moving to ${monthNames[month]} ${day}, ${year}...`, "info");
     
     try {
-      // Direct update without retries for better performance
+      // Get the current document to update it properly
       const projectDocRef = doc(db, "projects", selectedProjectId);
       const firestoreInstance = activeInstance === "facebook" ? "fbig" : activeInstance;
       
-      // Create a batch for better performance when updating multiple fields
-      const batch = writeBatch(db);
+      // Get the current document
+      const docSnap = await getDoc(projectDocRef);
       
-      // Update the specific fields needed (reduces data transfer size)
-      batch.update(projectDocRef, {
-        [`imageMetadata.${firestoreInstance}.${imageId}.location`]: targetKey,
-        [`imageMetadata.${firestoreInstance}.${imageId}.lastMoved`]: now,
-        [`imageMetadata.${firestoreInstance}.${imageId}.caption`]: imageMetadata[imageId].caption || ''
-      });
-      
-      // Commit the batch operations
-      await batch.commit();
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const imageMetadataData = data.imageMetadata || {};
+        const instanceData = imageMetadataData[firestoreInstance] || {};
+        
+        // Update the image data with new location
+        const updatedInstanceData = {
+          ...instanceData,
+          [imageId]: {
+            ...instanceData[imageId],
+            location: targetKey,
+            lastMoved: now,
+            caption: imageMetadata[imageId].caption || ''
+          }
+        };
+        
+        // Create the updated imageMetadata structure
+        const updatedImageMetadataObj = {
+          ...imageMetadataData,
+          [firestoreInstance]: updatedInstanceData
+        };
+        
+        // Update just the imageMetadata field
+        await updateDoc(projectDocRef, {
+          imageMetadata: updatedImageMetadataObj
+        });
+      }
       
       // Log the activity after successful update
       logActivity(`${user?.displayName} dropped '${imageMetadata[imageId].title}' on ${monthNames[month]} ${day}, ${year}`);
@@ -696,22 +804,40 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
     createSnack("Moving to pool...", "info");
     
     try {
-      // Direct update without retries for better performance
+      // Get the current document to update it properly
       const projectDocRef = doc(db, "projects", selectedProjectId);
       const firestoreInstance = activeInstance === "facebook" ? "fbig" : activeInstance;
       
-      // Create a batch for better performance when updating multiple fields
-      const batch = writeBatch(db);
+      // Get the current document
+      const docSnap = await getDoc(projectDocRef);
       
-      // Update just the specific fields we need to change
-      batch.update(projectDocRef, {
-        [`imageMetadata.${firestoreInstance}.${imageId}.location`]: "pool",
-        [`imageMetadata.${firestoreInstance}.${imageId}.lastMoved`]: now,
-        [`imageMetadata.${firestoreInstance}.${imageId}.caption`]: imageMetadata[imageId].caption || ''
-      });
-      
-      // Commit the batch operations
-      await batch.commit();
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const imageMetadataData = data.imageMetadata || {};
+        const instanceData = imageMetadataData[firestoreInstance] || {};
+        
+        // Update the image data with pool location
+        const updatedInstanceData = {
+          ...instanceData,
+          [imageId]: {
+            ...instanceData[imageId],
+            location: "pool",
+            lastMoved: now,
+            caption: imageMetadata[imageId].caption || ''
+          }
+        };
+        
+        // Create the updated imageMetadata structure
+        const updatedImageMetadataObj = {
+          ...imageMetadataData,
+          [firestoreInstance]: updatedInstanceData
+        };
+        
+        // Update just the imageMetadata field
+        await updateDoc(projectDocRef, {
+          imageMetadata: updatedImageMetadataObj
+        });
+      }
       
       // Log the activity after successful update
       logActivity(`${user?.displayName} moved '${imageMetadata[imageId].title}' back to pool`);
@@ -912,14 +1038,39 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
       // Determine the Firestore field to update based on active instance
       let firestoreInstance = activeInstance === "facebook" ? "fbig" : activeInstance;
       
-      // Create the direct update to Firestore
+      // Get the current document
       const projectDocRef = doc(db, "projects", selectedProjectId);
-      const updateData = {
-        [`imageMetadata.${firestoreInstance}.${id}`]: newMeta
-      };
+      const docSnap = await getDoc(projectDocRef);
       
-      // Use merge option to preserve other fields
-      await setDoc(projectDocRef, updateData, { merge: true });
+      if (docSnap.exists()) {
+        // Document exists, update it with proper structure
+        const data = docSnap.data();
+        const imageMetadataData = data.imageMetadata || {};
+        
+        // Create updated imageMetadata with new instance data
+        const updatedData = {
+          ...imageMetadataData,
+          [firestoreInstance]: {
+            ...(imageMetadataData[firestoreInstance] || {}),
+            [id]: newMeta
+          }
+        };
+        
+        // Update just the imageMetadata field
+        await updateDoc(projectDocRef, {
+          imageMetadata: updatedData
+        });
+      } else {
+        // Document doesn't exist, create it with the proper structure
+        await setDoc(projectDocRef, {
+          imageMetadata: {
+            [firestoreInstance]: {
+              [id]: newMeta
+            }
+          },
+          createdAt: serverTimestamp()
+        });
+      }
       
       createSnack("Content uploaded successfully.", "success");
       setUploadModalOpen(false);
@@ -1392,7 +1543,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
                   >
                     Logout
                   </button>
-          </div>
+                </div>
               )}
             </div>
           </div>
@@ -1449,6 +1600,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
               poolViewMode={poolViewMode}
               setPoolViewMode={setPoolViewMode}
               onUpload={() => setUploadModalOpen(true)}
+              onRefresh={forceReloadData}
               renderPoolImages={() =>
                 poolViewMode === "full"
                   ? poolImages.map(({ id, url }) => (
