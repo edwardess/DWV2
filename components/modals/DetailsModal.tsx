@@ -38,12 +38,16 @@ import React, {
     collection,
     query,
     getDocs,
-    orderBy
+    orderBy,
+    addDoc
   } from "firebase/firestore";
   import { db } from "@/components/services/firebaseService";
   import { useSnack } from "@/components/common/feedback/Snackbar";
   import { SocialMediaInstance, socialMediaConfig } from "@/components/ui/social-media-switch";
   import { runTransaction } from "firebase/firestore";
+  // Import JSZip and FileSaver directly
+  import JSZip from 'jszip';
+  import FileSaver from 'file-saver';
 
 // Import shadcn UI components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -129,6 +133,7 @@ export interface ExtendedImageMeta extends Omit<ImageMeta, 'contentType' | 'vide
     onSave: (updatedImage: ExtendedImageMeta) => Promise<void>;
     onDelete?: (imageId: string) => Promise<void>;
     projectId?: string;
+    logActivity?: (message: string) => Promise<void>;
   }
 
 // ScrollHintIndicator Component
@@ -150,6 +155,7 @@ const ScrollHintIndicator: React.FC = () => (
     onSave,
     onDelete,
     projectId,
+    logActivity,
   }: DetailsModalProps): JSX.Element | null => {
   const { user } = useAuth();
   const { createSnack } = useSnack();
@@ -270,7 +276,7 @@ const ScrollHintIndicator: React.FC = () => (
     const newValue = e.target.value;
     setDescText(newValue);
     if (image?.description !== undefined && newValue !== image.description) {
-      logActivity('updated the description');
+      logActivityLocally('updated the description');
     }
   };
 
@@ -278,7 +284,7 @@ const ScrollHintIndicator: React.FC = () => (
     const newValue = e.target.value;
     setCaptionText(newValue);
     if (image?.caption !== undefined && newValue !== image.caption) {
-      logActivity('updated the caption');
+      logActivityLocally('updated the caption');
     }
   };
 
@@ -988,7 +994,31 @@ const ScrollHintIndicator: React.FC = () => (
     }
   };
 
-  // Handle copying to another instance
+  // First, define the logActivityLocally function at the proper location
+  const logActivityLocally = async (action: string, details?: string) => {
+    if (!image?.id || !projectId) return;
+    
+    try {
+      const activitiesCollection = collection(db, "projects", projectId, "activities", image.id, "logs");
+      await addDoc(activitiesCollection, {
+        action,
+        details,
+        userId: user?.uid,
+        userName: user?.displayName || user?.email || 'Anonymous',
+        timestamp: serverTimestamp(),
+      });
+      
+      // Fetch the new activities list
+      fetchActivities(image.id);
+
+      // Also call the parent's logActivity function if it exists
+      logActivity?.(`${user?.displayName || user?.email || 'Anonymous'} ${action}`);
+    } catch (error) {
+      console.error('Error logging activity:', error);
+    }
+  };
+
+  // Restore the handleCopyToInstance function with the instance property added
   const handleCopyToInstance = async (targetInstance: SocialMediaInstance): Promise<void> => {
     // Prevent multiple rapid copies
     if (loadingCopyInstance || successCopyInstance) {
@@ -1044,77 +1074,26 @@ const ScrollHintIndicator: React.FC = () => (
             id: oldId,
             instance: oldInstance || currentInstance,
             timestamp: new Date()
-          }
+          },
+          // Add the instance property for the target instance
+          instance: targetInstance
         };
         
-        // Use a transaction for atomic operation and to prevent race conditions
-        await runTransaction(db, async (transaction) => {
-          // Get the current project document
-          const projectDocRef = doc(db, "projects", projectId);
-          const projectSnap = await transaction.get(projectDocRef);
-          
-          if (!projectSnap.exists()) {
-            throw new Error("Project document does not exist");
-          }
-          
-          const projectData = projectSnap.data();
-          
-          // Get the current imageMetadata or initialize it
-          const currentImageMetadata = projectData.imageMetadata || {};
-          
-          // Determine the Firestore field to update based on target instance
-          let firestoreInstance: string = targetInstance;
-          
-          // For Facebook, we need to save to the 'fbig' field to maintain compatibility
-          if (targetInstance === "facebook") {
-            firestoreInstance = "fbig";
-          }
-          
-          // Check if the target instance data exists
-          const targetInstanceData = currentImageMetadata[firestoreInstance] || {};
-          
-          // Check if an identical item already exists in the target instance to prevent duplicates
-          const existingDuplicate = Object.values(targetInstanceData).find((item: any) => 
-            item.url === image.url && 
-            item.title === image.title &&
-            item.location === image.location
-          );
-          
-          if (existingDuplicate) {
-            throw new Error(`This content already exists in ${socialMediaConfig[targetInstance].name}`);
-          }
-          
-          // Create the update object with the correct nesting structure
-          const updateObj = {
-            imageMetadata: {
-              [firestoreInstance]: {
-                [newId]: newImageMeta
-              }
-            },
-            lastUpdated: serverTimestamp() // Add server timestamp for tracking
-          };
-          
-          // Set the new document in the transaction with merge option
-          transaction.set(projectDocRef, updateObj, { merge: true });
+        // Determine the Firestore field to update based on target instance
+        let firestoreInstance: string;
+        switch (targetInstance) {
+          case "facebook":
+            firestoreInstance = "fbig"; // Legacy mapping for Facebook
+            break;
+          default:
+            firestoreInstance = targetInstance;
+        }
+        
+        // Update Firestore
+        const projectRef = doc(db, "projects", projectId);
+        await updateDoc(projectRef, {
+          [`imageMetadata.${firestoreInstance}.${newId}`]: newImageMeta
         });
-        
-        // Mark operation as successful
-        success = true;
-        
-        // Show success state with check icon
-        setLoadingCopyInstance(null);
-        setSuccessCopyInstance(targetInstance);
-        
-        // Clear success state after 2 seconds
-        setTimeout(() => {
-          setSuccessCopyInstance(null);
-        }, 2000);
-        
-        // Show success message with location information
-        const locationInfo = image.location === "pool" 
-          ? "in pool" 
-          : `on calendar (${image.location})`;
-        createSnack(`Successfully copied to ${socialMediaConfig[targetInstance].name} ${locationInfo}`, "success");
         
         // Log the activity with location information
         console.log(`Copied content from ${currentInstance} to ${targetInstance}`, {
@@ -1124,44 +1103,39 @@ const ScrollHintIndicator: React.FC = () => (
           location: newImageMeta.location
         });
         
-        // If logActivity function is available, use it to log the activity
-        if (logActivity && user) {
+        // Set success flag and update UI
+        success = true;
+        setSuccessCopyInstance(targetInstance);
+        setTimeout(() => setSuccessCopyInstance(null), 3000);
+        setLoadingCopyInstance(null);
+        
+        // Show success message
+        createSnack(`Copied to ${socialMediaConfig[targetInstance].name}!`, "success");
+        
+        // Log the activity
+        if (user) {
           const locationText = image.location === "pool" 
             ? "in pool" 
             : `on calendar (${image.location})`;
-          await logActivity(`${user.displayName} copied '${newImageMeta.title}' from ${socialMediaConfig[currentInstance].name} to ${socialMediaConfig[targetInstance].name} ${locationText}`);
+          await logActivityLocally(`copied '${newImageMeta.title}' from ${socialMediaConfig[currentInstance].name} to ${socialMediaConfig[targetInstance].name} ${locationText}`);
         }
+        
+        // Exit the retry loop
+        break;
       } catch (error) {
+        console.error(`Error copying to ${targetInstance}:`, error);
+        // Increment retry count
         retryCount++;
         
-        // Special handling for duplicate content errors
-        if (error instanceof Error && error.message.includes("already exists")) {
-          createSnack(error.message, "info");
-          success = true; // Don't retry for a duplicate error
+        if (retryCount <= maxRetries) {
+          console.log(`Retrying copy to ${targetInstance} (attempt ${retryCount} of ${maxRetries})...`);
+          // Wait a moment before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
         } else {
-          console.error(`Error copying to ${targetInstance} (attempt ${retryCount}/${maxRetries}):`, error);
-          
-          // Only show error to user if all retries have failed
-          if (retryCount > maxRetries) {
-            createSnack(`Failed to copy to ${socialMediaConfig[targetInstance].name}`, "error");
-          } else {
-            // Wait briefly before retry with exponential backoff
-            await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retryCount)));
-            console.log(`Retrying copy operation (${retryCount}/${maxRetries})...`);
-          }
-        }
-      } finally {
-        // Clear loading state if not successful
-        if (!success) {
+          // Show error message if all retries failed
+          createSnack(`Failed to copy to ${socialMediaConfig[targetInstance].name}`, "error");
           setLoadingCopyInstance(null);
         }
-        
-        // Also clear success state in case of error
-        if (successCopyInstance === targetInstance && !success) {
-          setSuccessCopyInstance(null);
-        }
-        // Keep dropdown open after operation
-        // Note: We don't close the dropdown here, it will only close when clicking outside
       }
     }
     
@@ -1259,64 +1233,6 @@ const ScrollHintIndicator: React.FC = () => (
     console.log('Current activities:', activities);
   }, [activities]);
 
-  // Update logActivity function to use a dedicated activities collection
-  const logActivity = async (action: string, details?: string) => {
-    console.log("logActivity called with:", { action, details });
-    if (!user || !image) {
-      console.error("logActivity: Missing user or image data");
-      return;
-    }
-
-    try {
-      // Create a new activity with a unique ID
-      const newActivity: Activity = {
-        id: `activity_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        userId: user.uid,
-        userName: user.displayName || 'Unknown User',
-        userPhoto: user.photoURL || undefined,
-        action,
-        details,
-        timestamp: new Date(),
-      };
-
-      console.log("Creating new activity:", newActivity);
-      
-      // Create updated activities array with the new entry at the beginning
-      const currentActivities = Array.isArray(activities) ? activities : [];
-      const updatedActivities = [newActivity, ...currentActivities];
-      
-      // Debug logging
-      console.log("Previous activities count:", currentActivities.length);
-      console.log("Updated activities count:", updatedActivities.length);
-      
-      // Update local state first (optimistic update)
-      setActivities(updatedActivities);
-
-      // Use proper Firestore subcollection path
-      // Format: /images/{imageId}/activities/{activityId}
-      const activityDocRef = doc(db, "images", image.id, "activities", newActivity.id);
-      
-      // Convert timestamp for Firestore
-      const firestoreActivity = {
-        ...newActivity,
-        imageId: image.id,
-        timestamp: serverTimestamp(), // Use server timestamp for more accurate timing
-        createdAt: serverTimestamp()
-      };
-      
-      // Save the activity to Firestore
-      await setDoc(activityDocRef, firestoreActivity);
-      
-      console.log("Activity logged successfully to separate collection");
-      
-      // No need to update the image metadata since activities are stored separately
-    } catch (error) {
-      console.error('Error logging activity:', error);
-      // Revert local state if save fails
-      setActivities(Array.isArray(activities) ? activities : []);
-    }
-  };
-
   // Function to fetch activities from Firestore
   const fetchActivities = async (imageId: string) => {
     if (!imageId) {
@@ -1371,6 +1287,83 @@ const ScrollHintIndicator: React.FC = () => (
     } catch (error) {
       console.error("Error fetching activities:", error);
       setActivities([]);
+    }
+  };
+
+  // Helper function to handle carousel download
+  const handleCarouselDownload = async () => {
+    if (!image?.carouselArrangement || image.carouselArrangement.length === 0) {
+      createSnack("No carousel images to download", "error");
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder("carousel-images");
+      
+      if (!folder) {
+        throw new Error("Failed to create zip folder");
+      }
+      
+      // Create an array of promises for all image downloads
+      const downloadPromises = image.carouselArrangement.map(async (photo, index) => {
+        if (!photo || !photo.url) return false;
+        
+        try {
+          const response = await fetch(photo.url);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.statusText}`);
+          }
+          
+          const blob = await response.blob();
+          
+          // Get content type from blob to determine extension
+          const contentType = blob.type;
+          let extension = 'jpg'; // Default extension
+          
+          // Map content type to appropriate extension
+          if (contentType) {
+            if (contentType.includes('png')) extension = 'png';
+            else if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg';
+            else if (contentType.includes('gif')) extension = 'gif';
+            else if (contentType.includes('webp')) extension = 'webp';
+            else if (contentType.includes('svg')) extension = 'svg';
+          }
+          
+          // Create a clean filename with the proper extension
+          const safeFileName = `image-${index + 1}.${extension}`;
+          
+          // Add the file to the zip
+          folder.file(safeFileName, blob);
+          
+          return true;
+        } catch (error) {
+          console.error(`Error downloading image ${index}:`, error);
+          return false;
+        }
+      });
+      
+      // Wait for all downloads to complete
+      await Promise.all(downloadPromises);
+      
+      // Generate the zip file
+      const content = await zip.generateAsync({ type: "blob" });
+      
+      // Create a safe filename using the content title if available
+      const zipFileName = image.title 
+        ? `${image.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-carousel.zip`
+        : "carousel-images.zip";
+      
+      // Trigger download
+      FileSaver.saveAs(content, zipFileName);
+      createSnack("Carousel images downloaded successfully", "success");
+    } catch (error) {
+      console.error("Error creating zip file:", error);
+      createSnack(`Failed to download images: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -1680,17 +1673,31 @@ const ScrollHintIndicator: React.FC = () => (
                                 </span>
                               </CardTitle>
                               
-                              {/* Download button for videos/reels */}
-                              {(currentContentType === 'video' || currentContentType === 'reel') && image?.videoEmbed && !editing && (
-                                <button
-                                  onClick={() => handleVideoDownload(image.videoEmbed || '')}
-                                  className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
-                                  disabled={isDownloading}
-                                >
-                                  <span>{isDownloading ? "..." : "Download"}</span>
-                                  <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
-                                </button>
-                              )}
+                              <div className="flex items-center gap-2">
+                                {/* Download button for videos/reels */}
+                                {(currentContentType === 'video' || currentContentType === 'reel') && image?.videoEmbed && !editing && (
+                                  <button
+                                    onClick={() => handleVideoDownload(image.videoEmbed || '')}
+                                    className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                    disabled={isDownloading}
+                                  >
+                                    <span>{isDownloading ? "..." : "Download"}</span>
+                                    <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                                  </button>
+                                )}
+                                
+                                {/* Download button for carousel */}
+                                {currentContentType === 'carousel' && image?.carouselArrangement && image.carouselArrangement.length > 0 && !editing && (
+                                  <button
+                                    onClick={handleCarouselDownload}
+                                    className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                    disabled={isDownloading}
+                                  >
+                                    <span>{isDownloading ? "..." : "Download All"}</span>
+                                    <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </CardHeader>
                           <CardContent className="p-0 h-[calc(100%-48px)] flex items-center justify-center bg-background/60">
@@ -1806,17 +1813,31 @@ const ScrollHintIndicator: React.FC = () => (
                               </span>
                             </CardTitle>
                             
-                            {/* Download button for videos/reels */}
-                            {(currentContentType === 'video' || currentContentType === 'reel') && image?.videoEmbed && !editing && (
-                              <button
-                                onClick={() => handleVideoDownload(image.videoEmbed || '')}
-                                className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
-                                disabled={isDownloading}
-                              >
-                                <span>{isDownloading ? "..." : "Download"}</span>
-                                <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
-                              </button>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {/* Download button for videos/reels */}
+                              {(currentContentType === 'video' || currentContentType === 'reel') && image?.videoEmbed && !editing && (
+                                <button
+                                  onClick={() => handleVideoDownload(image.videoEmbed || '')}
+                                  className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                  disabled={isDownloading}
+                                >
+                                  <span>{isDownloading ? "..." : "Download"}</span>
+                                  <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                                </button>
+                              )}
+                              
+                              {/* Download button for carousel */}
+                              {currentContentType === 'carousel' && image?.carouselArrangement && image.carouselArrangement.length > 0 && !editing && (
+                                <button
+                                  onClick={handleCarouselDownload}
+                                  className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                  disabled={isDownloading}
+                                >
+                                  <span>{isDownloading ? "..." : "Download All"}</span>
+                                  <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </CardHeader>
                         <CardContent className="p-0 h-[calc(100%-48px)] flex items-center justify-center bg-background/60">

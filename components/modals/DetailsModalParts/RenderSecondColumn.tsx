@@ -17,6 +17,8 @@ import {
   } from "firebase/storage";
   import HashLoader from "react-spinners/HashLoader";
 import ConfirmationModal from "@/components/ui/confirmation-modal";
+import JSZip from 'jszip';
+import FileSaver from 'file-saver';
   // Extend the CarouselPhoto interface to include a position field.
   export interface CarouselPhoto {
     id: string;
@@ -752,7 +754,7 @@ import ConfirmationModal from "@/components/ui/confirmation-modal";
     projectId?: string;
     // onCarouselArrangementSave receives the full slots array (with positions).
     onCarouselArrangementSave: (arrangement: (CarouselPhoto | null)[]) => void;
-    editing: Boolean;
+    editing: boolean;
   }
   
   const RenderSecondColumn: React.FC<RenderSecondColumnProps> = ({
@@ -764,6 +766,20 @@ import ConfirmationModal from "@/components/ui/confirmation-modal";
   }) => {
     const [showCarouselModal, setShowCarouselModal] = useState(false);
     const [editingVideoUrl, setEditingVideoUrl] = useState(image?.videoEmbed || "");
+    const [embeddedVideo, setEmbeddedVideo] = useState<string | null>(null);
+    const [isEditing, setIsEditing] = useState<boolean>(Boolean(editing));
+    const [showArrangementModal, setShowArrangementModal] = useState(false);
+    const [arrangementSaving, setArrangementSaving] = useState(false);
+    const [isDownloadingCarousel, setIsDownloadingCarousel] = useState(false);
+    const carouselArrangement = useMemo(() => {
+      return (
+        image?.carouselArrangement?.filter(
+          (item): item is CarouselPhoto => {
+            return item !== null && typeof item.url === 'string' && item.url.length > 0;
+          }
+        ) || []
+      );
+    }, [image?.carouselArrangement]);
   
     // Update editingVideoUrl when image changes
     useEffect(() => {
@@ -854,6 +870,93 @@ import ConfirmationModal from "@/components/ui/confirmation-modal";
       }
       return url;
     }
+  
+    useEffect(() => {
+      if (currentType === "video" || currentType === "reel") {
+        // If the image has a videoEmbed, use it.
+        if (image?.videoEmbed) {
+          setEmbeddedVideo(image.videoEmbed);
+        }
+      } else {
+        setEmbeddedVideo(null);
+      }
+    }, [currentType, image]);
+
+    // Handle carousel download
+    const handleCarouselDownload = async () => {
+      if (!carouselArrangement || carouselArrangement.length === 0) {
+        console.error("No carousel images to download");
+        return;
+      }
+
+      setIsDownloadingCarousel(true);
+
+      try {
+        const zip = new JSZip();
+        let folder = zip.folder("carousel-images");
+        
+        if (!folder) {
+          throw new Error("Failed to create zip folder");
+        }
+
+        // Create an array of promises for all image downloads
+        const downloadPromises = carouselArrangement.map(async (photo, index) => {
+          try {
+            const response = await fetch(photo.url);
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch image: ${response.statusText}`);
+            }
+            
+            const blob = await response.blob();
+            
+            // Extract file extension from URL or default to jpg
+            const urlParts = photo.url.split('/');
+            const fileName = urlParts[urlParts.length - 1];
+            const extension = fileName.split('.').pop() || 'jpg';
+            
+            // Create a filename with the position index
+            const safeFileName = `image-${index + 1}.${extension}`;
+            
+            // Add the file to the zip
+            folder?.file(safeFileName, blob);
+            
+            return true;
+          } catch (error) {
+            console.error(`Error downloading image ${index}:`, error);
+            return false;
+          }
+        });
+
+        // Wait for all downloads to complete
+        await Promise.all(downloadPromises);
+        
+        // Generate the zip file
+        const content = await zip.generateAsync({ type: "blob" });
+        
+        // Create a safe filename using the content title if available
+        const zipFileName = image?.title 
+          ? `${image.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-carousel.zip`
+          : "carousel-images.zip";
+        
+        // Trigger download
+        FileSaver.saveAs(content, zipFileName);
+      } catch (error) {
+        console.error("Error creating zip file:", error);
+      } finally {
+        setIsDownloadingCarousel(false);
+      }
+    };
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const videoEmbedRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+      // When editing state changes, we should update the embedded video input.
+      if (isEditing && videoEmbedRef.current) {
+        videoEmbedRef.current.value = embeddedVideo || "";
+      }
+    }, [isEditing, embeddedVideo]);
   
     if (currentType === "carousel") {
       return (
