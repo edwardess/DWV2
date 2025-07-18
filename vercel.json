@@ -28,6 +28,11 @@
       "source": "/amy",
       "destination": "https://docs.google.com/spreadsheets/d/1yf0RVQjO-cDq-fTpedR9BnUkqwEBaPtM2Q2lUvTwoWY",
       "permanent": true
+    },
+            {
+      "source": "/podcast",
+      "destination": "https://officialwfhcouple.systeme.io/packages/#headline-db06c0be",
+      "permanent": true
     }
   ]
 }
