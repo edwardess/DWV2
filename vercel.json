@@ -33,6 +33,11 @@
       "source": "/podcast",
       "destination": "https://officialwfhcouple.systeme.io/packages/#headline-db06c0be",
       "permanent": true
-    }
+    },    
+    {
+      "source": "/",
+      "destination": "https://portfolio-wfhcouple.vercel.app",
+      "permanent": true
+    },
   ]
 }
