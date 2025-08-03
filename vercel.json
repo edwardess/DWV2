@@ -11,7 +11,7 @@
     },
     {
       "source": "/portfolio",
-      "destination": "https://portfolio-wfhcouple.vercel.app",
+      "destination": "https://portfolio.wfhcouple.com",
       "permanent": true
     },
     {
@@ -36,7 +36,7 @@
     },    
     {
       "source": "/",
-      "destination": "https://portfolio-wfhcouple.vercel.app",
+      "destination": "https://portfolio.wfhcouple.com",
       "permanent": true
     }
   ]
