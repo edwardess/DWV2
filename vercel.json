@@ -38,6 +38,6 @@
       "source": "/",
       "destination": "https://portfolio-wfhcouple.vercel.app",
       "permanent": true
-    },
+    }
   ]
 }
