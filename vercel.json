@@ -41,7 +41,7 @@
     },    
     {
       "source": "/freebies",
-      "destination": "freebies.wfhcouple.com",
+      "destination": "https://freebies.wfhcouple.com",
       "permanent": true
     }
   ]
