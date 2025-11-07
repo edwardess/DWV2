@@ -35,11 +35,6 @@
       "permanent": true
     },    
     {
-      "source": "/",
-      "destination": "https://portfolio.wfhcouple.com",
-      "permanent": true
-    },    
-    {
       "source": "/etherealco",
       "destination": "https://palligyudon1.systeme.io/e94f0a69",
       "permanent": true
