@@ -763,89 +763,6 @@ import FileSaver from 'file-saver';
     editing: boolean;
   }
   
-  // Google Drive Embed Component with error handling and fallback
-  interface GoogleDriveEmbedProps {
-    embedUrl: string;
-    originalUrl: string;
-    isReel: boolean;
-  }
-
-  const GoogleDriveEmbed: React.FC<GoogleDriveEmbedProps> = ({ embedUrl, originalUrl, isReel }) => {
-    const [embedFailed, setEmbedFailed] = useState(false);
-    const iframeRef = useRef<HTMLIFrameElement>(null);
-
-    const isGoogleDrive = embedUrl.includes("drive.google.com");
-
-    // Handle iframe load error (CSP violations)
-    useEffect(() => {
-      const iframe = iframeRef.current;
-      if (!iframe) return;
-
-      const handleError = () => {
-        setEmbedFailed(true);
-      };
-
-      // Try to detect CSP violations by checking if iframe loads
-      const timeout = setTimeout(() => {
-        try {
-          // If we can't access iframe content, it might be blocked
-          if (iframe.contentWindow === null) {
-            setEmbedFailed(true);
-          }
-        } catch (e) {
-          // Cross-origin error means iframe loaded but we can't access it (normal)
-          // Only set failed if we get a specific error
-        }
-      }, 2000);
-
-      iframe.addEventListener("error", handleError);
-
-      return () => {
-        clearTimeout(timeout);
-        iframe.removeEventListener("error", handleError);
-      };
-    }, [embedUrl]);
-
-    // If embed failed, show fallback UI
-    if (embedFailed && isGoogleDrive) {
-      return (
-        <div className="absolute inset-0 w-full h-full rounded-xl bg-gray-100 flex items-center justify-center">
-          <div className="text-center p-4 max-w-md">
-            <p className="font-medium mb-2 text-gray-800">Unable to embed Google Drive video</p>
-            <p className="text-xs text-gray-600 mb-4">
-              This video cannot be embedded due to Google Drive's security policy. 
-              Please ensure the file is shared with "Anyone with the link can view" permission.
-            </p>
-            <button
-              type="button"
-              onClick={() => window.open(originalUrl, '_blank', 'noopener,noreferrer')}
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors"
-            >
-              Open in Google Drive
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    // Render iframe - remove sandbox for Google Drive to avoid CSP issues
-    return (
-      <iframe
-        ref={iframeRef}
-        src={embedUrl}
-        className="absolute inset-0 w-full h-full rounded-xl"
-        frameBorder="0"
-        allowFullScreen
-        loading="lazy"
-        sandbox={isGoogleDrive ? undefined : "allow-scripts allow-same-origin allow-presentation"}
-        referrerPolicy="no-referrer"
-        width={isReel ? 1080 : undefined}
-        height={isReel ? 1920 : undefined}
-        onError={() => setEmbedFailed(true)}
-      />
-    );
-  };
-
   // Validate embed URL for video/reel content
   const validateEmbedUrl = (url: string): boolean => {
     if (!url || typeof url !== 'string' || url.trim() === '') {
@@ -1149,10 +1066,17 @@ import FileSaver from 'file-saver';
               }}
             >
               {validateEmbedUrl(embedUrl) ? (
-                <GoogleDriveEmbed
-                  embedUrl={embedUrl}
-                  originalUrl={urlToProcess}
-                  isReel={currentType === "reel"}
+                <iframe
+                  src={embedUrl}
+                  className="absolute inset-0 w-full h-full rounded-xl"
+                  frameBorder="0"
+                  allowFullScreen
+                  allow="autoplay; fullscreen"
+                  loading="lazy"
+                  sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox allow-forms"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  width={currentType === "reel" ? 1080 : undefined}
+                  height={currentType === "reel" ? 1920 : undefined}
                 />
               ) : (
                 <div className="absolute inset-0 w-full h-full rounded-xl bg-gray-100 flex items-center justify-center text-red-500">
