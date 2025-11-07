@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Existing rules...
+    
+    // Helper function to check if user is a project member
+    function isProjectMember(projectId) {
+      return request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberIds;
+    }
+    
+    // Notifications rules
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && isProjectMember(resource.data.projectId);
+      allow create: if request.auth != null && isProjectMember(request.resource.data.projectId);
+      allow update: if request.auth != null 
+        && isProjectMember(resource.data.projectId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if false; // Notifications cannot be deleted
+    }
+  }
+} 

@@ -1,0 +1,48 @@
+{
+  "redirects": [
+        {
+      "source": "/kysele",
+      "destination": "https://drive.google.com/drive/folders/1pFG_S03tvOCs40zMciFItuJ-L1aUwWmx?usp=drive_link",
+      "permanent": true
+    },    {
+      "source": "/services",
+      "destination": "https://officialwfhcouple.systeme.io/services",
+      "permanent": true
+    },
+    {
+      "source": "/portfolio",
+      "destination": "https://portfolio.wfhcouple.com",
+      "permanent": true
+    },
+    {
+      "source": "/consultation",
+      "destination": "https://officialwfhcouple.systeme.io/consultation",
+      "permanent": true
+    },
+    {
+      "source": "/packages",
+      "destination": "https://officialwfhcouple.systeme.io/packages",
+      "permanent": true
+    },
+    {
+      "source": "/amy",
+      "destination": "https://docs.google.com/spreadsheets/d/1yf0RVQjO-cDq-fTpedR9BnUkqwEBaPtM2Q2lUvTwoWY",
+      "permanent": true
+    },
+            {
+      "source": "/podcast",
+      "destination": "https://officialwfhcouple.systeme.io/packages/#headline-db06c0be",
+      "permanent": true
+    },    
+    {
+      "source": "/",
+      "destination": "https://portfolio.wfhcouple.com",
+      "permanent": true
+    },    
+    {
+      "source": "/etherealco",
+      "destination": "https://palligyudon1.systeme.io/e94f0a69",
+      "permanent": true
+    }
+  ]
+}
