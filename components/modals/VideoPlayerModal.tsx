@@ -58,7 +58,6 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           <video
             src={videoUrl}
             controls
-            autoPlay
             className="max-w-full max-h-full rounded-lg shadow-2xl"
             style={{ maxHeight: "90vh" }}
           >
