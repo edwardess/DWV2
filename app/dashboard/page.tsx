@@ -1,5 +1,8 @@
 "use client";
 import React, { useState, useEffect } from "react";
+
+// Force dynamic rendering to prevent SSR issues with localStorage
+export const dynamic = 'force-dynamic';
 import { AuthProvider, useAuth } from "@/components/services/AuthProvider";
 import DemoWrapper from "@/components/pages/DemoWrapper";
 import Sidebar from "@/components/pages/DemoWrapper/Sidebar";

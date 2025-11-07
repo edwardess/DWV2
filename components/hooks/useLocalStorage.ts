@@ -13,6 +13,11 @@ export function useLocalStorage<T>({
 }: UseLocalStorageOptions<T>): [T, (value: T) => void] {
   // Initialize state with stored value or default
   const [storedValue, setStoredValue] = useState<T>(() => {
+    // Check if we're in the browser (not SSR)
+    if (typeof window === 'undefined') {
+      return defaultValue;
+    }
+    
     try {
       const item = window.localStorage.getItem(key);
       if (!item) return defaultValue;
@@ -36,8 +41,10 @@ export function useLocalStorage<T>({
     try {
       // Save state
       setStoredValue(value);
-      // Save to localStorage
-      window.localStorage.setItem(key, JSON.stringify(value));
+      // Save to localStorage (only in browser)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      }
     } catch (error) {
       console.warn(`Error setting localStorage key "${key}":`, error);
     }
