@@ -12,7 +12,7 @@ const fontSans = FontSans({
 });
 
 export const metadata: Metadata = {
-  title: "DWVA",
+  title: "DWV Calendar",
   description: "Manage your content calendar and social media assets",
 };
 
