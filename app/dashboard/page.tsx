@@ -1,12 +1,25 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import dynamicImport from "next/dynamic";
 
-// Force dynamic rendering to prevent SSR issues with localStorage
+// Force dynamic rendering to prevent SSR issues with localStorage and browser APIs
 export const dynamic = 'force-dynamic';
+
+// Dynamically import components that use browser APIs to prevent SSR issues
+const DemoWrapper = dynamicImport(() => import("@/components/pages/DemoWrapper"), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-screen">Loading...</div>
+});
+
+const Sidebar = dynamicImport(() => import("@/components/pages/DemoWrapper/Sidebar"), {
+  ssr: false
+});
+
+const ProjectCreationModal = dynamicImport(() => import("@/components/modals/ProjectCreationModal"), {
+  ssr: false
+});
+
 import { AuthProvider, useAuth } from "@/components/services/AuthProvider";
-import DemoWrapper from "@/components/pages/DemoWrapper";
-import Sidebar from "@/components/pages/DemoWrapper/Sidebar";
-import ProjectCreationModal from "@/components/modals/ProjectCreationModal";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import {
