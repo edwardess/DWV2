@@ -763,6 +763,43 @@ import FileSaver from 'file-saver';
     editing: boolean;
   }
   
+  // Validate embed URL for video/reel content
+  const validateEmbedUrl = (url: string): boolean => {
+    if (!url || typeof url !== 'string' || url.trim() === '') {
+      return false;
+    }
+    
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.toLowerCase();
+      
+      // Google Drive
+      if (hostname.includes('drive.google.com')) {
+        return url.includes('/file/d/') || url.includes('/preview');
+      }
+      
+      // YouTube
+      if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+        return true;
+      }
+      
+      // Vimeo
+      if (hostname.includes('vimeo.com')) {
+        return true;
+      }
+      
+      // Other common video hosting platforms
+      if (hostname.includes('dailymotion.com') || 
+          hostname.includes('twitch.tv')) {
+        return true;
+      }
+      
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   const RenderSecondColumn: React.FC<RenderSecondColumnProps> = ({
     currentType,
     image,
