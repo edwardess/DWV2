@@ -140,10 +140,17 @@ export default function MobileCalendarRow({
 
       {/* Right Side: Cards Container */}
       <div
-        className={`flex-1 rounded-r-lg p-2 min-h-[80px] flex items-center ${
+        className={`flex-1 rounded-r-lg p-2 min-h-[80px] flex items-center relative ${
           cards.length === 0 ? "justify-center" : "justify-start"
         } ${isFull ? "bg-gray-50" : "bg-white"}`}
       >
+        {/* Drop Zone Indicator */}
+        {isTouchOver && !isFull && draggedCardId && (
+          <div className="absolute inset-0 flex items-center justify-center border-2 border-dashed border-blue-400 bg-blue-50/50 rounded-lg z-10 transition-opacity duration-200">
+            <span className="text-blue-600 font-medium text-sm">drop here</span>
+          </div>
+        )}
+        
         {cards.length === 0 ? (
           // Empty state
           <div className="text-gray-400 text-sm">empty</div>

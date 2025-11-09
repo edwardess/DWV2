@@ -125,7 +125,7 @@ export default function MobileCalendarCard({
       onTouchEnd={handleTouchEnd}
       onClick={onClick}
       className={`relative w-full aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-move active:opacity-75 transition-opacity border border-gray-200 ${
-        isDragging ? "opacity-50 scale-95" : ""
+        isDragging ? "opacity-0" : ""
       }`}
       style={{ touchAction: "none" }}
     >

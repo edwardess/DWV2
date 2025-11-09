@@ -28,6 +28,7 @@ import MobileUploadModal from "./modals/MobileUploadModal";
 import MobileDetailsModal from "./modals/MobileDetailsModal";
 import MobileDraftModal from "./modals/MobileDraftModal";
 import HashLoader from "react-spinners/HashLoader";
+import Image from "next/image";
 
 interface MobileWrapperProps {
   projectId: string;
@@ -124,10 +125,13 @@ export default function MobileWrapper({
   // Touch drag and drop state
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
+  const [touchPosition, setTouchPosition] = useState<{ x: number; y: number } | null>(null);
   
   // Refs for touch tracking (avoid re-renders on every touchmove)
   const touchStartPosRef = useRef<{ x: number; y: number; id: string } | null>(null);
   const hasMovedRef = useRef(false);
+  const touchPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const rafIdRef = useRef<number | null>(null);
 
   // Update selectedProjectId when prop changes
   useEffect(() => {
@@ -398,6 +402,9 @@ export default function MobileWrapper({
     touchStartPosRef.current = { x: touch.clientX, y: touch.clientY, id };
     hasMovedRef.current = false;
     setDraggedCardId(id);
+    // Don't set touch position yet - wait for drag threshold
+    touchPositionRef.current = null;
+    setTouchPosition(null);
   }, []);
 
   const handleTouchMove = useCallback((touch: Touch) => {
@@ -409,6 +416,20 @@ export default function MobileWrapper({
     
     if (deltaX > 10 || deltaY > 10) {
       hasMovedRef.current = true;
+      
+      // Update touch position for floating card (only after threshold)
+      // Always update ref immediately for latest position
+      touchPositionRef.current = { x: touch.clientX, y: touch.clientY };
+      
+      // Update state via RAF for smooth rendering (throttle to 60fps)
+      // Only schedule if not already scheduled (prevents multiple RAF calls)
+      if (!rafIdRef.current) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          // Use latest ref value (may have changed during RAF wait)
+          setTouchPosition(touchPositionRef.current);
+          rafIdRef.current = null;
+        });
+      }
     }
 
     // Find row element under touch point
@@ -433,12 +454,20 @@ export default function MobileWrapper({
   }, []);
 
   const handleTouchEnd = useCallback(() => {
+    // Cancel any pending RAF
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+
     if (!touchStartPosRef.current || !draggedCardId) {
       // Reset state
       touchStartPosRef.current = null;
       hasMovedRef.current = false;
       setDraggedCardId(null);
       setHoveredRowKey(null);
+      setTouchPosition(null);
+      touchPositionRef.current = null;
       return;
     }
 
@@ -468,6 +497,8 @@ export default function MobileWrapper({
     hasMovedRef.current = false;
     setDraggedCardId(null);
     setHoveredRowKey(null);
+    setTouchPosition(null);
+    touchPositionRef.current = null;
   }, [draggedCardId, hoveredRowKey, groupedDroppedImages, handleCardDrop]);
 
   // Global touch event listeners
@@ -746,6 +777,50 @@ export default function MobileWrapper({
           projectId={selectedProjectId}
           activeInstance={activeInstance}
         />
+      )}
+
+      {/* Floating Dragged Card */}
+      {draggedCardId && touchPosition && imageMetadata[draggedCardId] && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{
+            left: `${touchPosition.x}px`,
+            top: `${touchPosition.y}px`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-gray-100 opacity-60 scale-110 shadow-2xl border-2 border-blue-400">
+            {/* Status Indicator */}
+            <div className="absolute top-1 left-1/2 transform -translate-x-1/2 z-10">
+              <div
+                className={`w-3 h-3 rounded-full border-2 border-white shadow-sm ${
+                  !imageMetadata[draggedCardId].label
+                    ? "bg-gray-400"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "approved"
+                    ? "bg-green-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "draft"
+                    ? "bg-amber-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "needs revision"
+                    ? "bg-red-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "ready for approval"
+                    ? "bg-blue-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "scheduled"
+                    ? "bg-purple-500"
+                    : "bg-gray-400"
+                }`}
+              />
+            </div>
+            {/* Image */}
+            <Image
+              src={imageMetadata[draggedCardId].url}
+              alt={imageMetadata[draggedCardId].title || "Content"}
+              fill
+              className="object-cover"
+              sizes="96px"
+              draggable={false}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
