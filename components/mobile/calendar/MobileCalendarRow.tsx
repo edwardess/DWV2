@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import MobileCalendarCard from "./MobileCalendarCard";
 import { ImageMeta } from "@/components/pages/DemoWrapper";
 
@@ -15,6 +15,9 @@ interface MobileCalendarRowProps {
   maxCards: number; // Strict limit: 3 cards maximum
   isDragOver?: boolean; // For visual feedback
   cardsInTransit?: Set<string>; // For loading spinners
+  draggedCardId?: string | null;
+  hoveredRowKey?: string | null;
+  onTouchStart?: (id: string, touch: Touch) => void;
 }
 
 const monthNames = [
@@ -32,10 +35,20 @@ export default function MobileCalendarRow({
   onDrop,
   maxCards = 3,
   cardsInTransit = new Set(),
+  draggedCardId = null,
+  hoveredRowKey = null,
+  onTouchStart,
 }: MobileCalendarRowProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isTouchOver, setIsTouchOver] = useState(false);
 
   const isFull = cards.length >= maxCards;
+  const dateKey = `${year}-${month}-${day}`;
+
+  // Check if this row is hovered during touch drag
+  useEffect(() => {
+    setIsTouchOver(hoveredRowKey === dateKey);
+  }, [hoveredRowKey, dateKey]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -98,13 +111,14 @@ export default function MobileCalendarRow({
 
   return (
     <div
+      data-row-key={dateKey}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={`w-full mb-3 rounded-lg border border-gray-300 bg-white flex items-stretch transition-colors ${
         isFull
           ? "opacity-60 cursor-not-allowed"
-          : isDragOver
+          : isDragOver || isTouchOver
           ? "border-blue-400 bg-blue-50"
           : "hover:border-gray-400"
       }`}
@@ -162,6 +176,8 @@ export default function MobileCalendarRow({
                     onDragStart={() => {}}
                     onClick={() => onCardClick(card.id)}
                     inTransit={cardsInTransit.has(card.id)}
+                    onTouchStart={onTouchStart ? (touch) => onTouchStart(card.id, touch) : undefined}
+                    isDragging={draggedCardId === card.id}
                   />
                 </div>
               );

@@ -121,6 +121,14 @@ export default function MobileWrapper({
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [currentDetailsId, setCurrentDetailsId] = useState<string>("");
 
+  // Touch drag and drop state
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
+  const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
+  
+  // Refs for touch tracking (avoid re-renders on every touchmove)
+  const touchStartPosRef = useRef<{ x: number; y: number; id: string } | null>(null);
+  const hasMovedRef = useRef(false);
+
   // Update selectedProjectId when prop changes
   useEffect(() => {
     if (projectId && projectId !== selectedProjectId) {
@@ -385,6 +393,113 @@ export default function MobileWrapper({
     debouncedCardDrop(day, month, year, imageId);
   };
 
+  // Touch drag and drop handlers
+  const handleTouchStart = useCallback((id: string, touch: Touch) => {
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY, id };
+    hasMovedRef.current = false;
+    setDraggedCardId(id);
+  }, []);
+
+  const handleTouchMove = useCallback((touch: Touch) => {
+    if (!touchStartPosRef.current) return;
+
+    // Check if touch has moved beyond threshold (10px)
+    const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+    
+    if (deltaX > 10 || deltaY > 10) {
+      hasMovedRef.current = true;
+    }
+
+    // Find row element under touch point
+    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!elementUnderTouch) {
+      setHoveredRowKey(null);
+      return;
+    }
+
+    // Traverse up DOM tree to find row with data-row-key attribute
+    let currentElement: Element | null = elementUnderTouch;
+    while (currentElement) {
+      const rowKey = currentElement.getAttribute("data-row-key");
+      if (rowKey) {
+        setHoveredRowKey(rowKey);
+        return;
+      }
+      currentElement = currentElement.parentElement;
+    }
+
+    setHoveredRowKey(null);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStartPosRef.current || !draggedCardId) {
+      // Reset state
+      touchStartPosRef.current = null;
+      hasMovedRef.current = false;
+      setDraggedCardId(null);
+      setHoveredRowKey(null);
+      return;
+    }
+
+    // If it was a drag (moved > 10px) and ended over a valid row
+    if (hasMovedRef.current && hoveredRowKey) {
+      // Parse row key: format is "year-month-day"
+      const parts = hoveredRowKey.split("-");
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
+        
+        // Check if row is full
+        const targetKey = `${year}-${month}-${day}`;
+        const existingCards = groupedDroppedImages[targetKey] || [];
+        const cardsExcludingCurrent = existingCards.filter(card => card.id !== draggedCardId);
+        
+        if (cardsExcludingCurrent.length < 3) {
+          // Valid drop - call handleCardDrop
+          handleCardDrop(day, month, year, draggedCardId);
+        }
+      }
+    }
+
+    // Reset all touch state
+    touchStartPosRef.current = null;
+    hasMovedRef.current = false;
+    setDraggedCardId(null);
+    setHoveredRowKey(null);
+  }, [draggedCardId, hoveredRowKey, groupedDroppedImages, handleCardDrop]);
+
+  // Global touch event listeners
+  useEffect(() => {
+    if (!draggedCardId) {
+      return;
+    }
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handleTouchMove(e.touches[0]);
+        e.preventDefault(); // Prevent scrolling during drag
+      }
+    };
+
+    const handleGlobalTouchEnd = (e: TouchEvent) => {
+      handleTouchEnd();
+      e.preventDefault();
+    };
+
+    // Add listeners with passive: false to allow preventDefault
+    document.addEventListener("touchmove", handleGlobalTouchMove, { passive: false });
+    document.addEventListener("touchend", handleGlobalTouchEnd, { passive: false });
+    document.addEventListener("touchcancel", handleGlobalTouchEnd, { passive: false });
+
+    return () => {
+      document.removeEventListener("touchmove", handleGlobalTouchMove);
+      document.removeEventListener("touchend", handleGlobalTouchEnd);
+      document.removeEventListener("touchcancel", handleGlobalTouchEnd);
+    };
+  }, [draggedCardId, handleTouchMove, handleTouchEnd]);
+
   // Handle upload with date
   const handleUpload = async (formData: FormData, file: File, selectedDate: Date) => {
     if (!selectedProjectId) {
@@ -595,6 +710,9 @@ export default function MobileWrapper({
           onCardDrop={handleCardDrop}
           activeInstance={activeInstance}
           cardsInTransit={cardsInTransit}
+          draggedCardId={draggedCardId}
+          hoveredRowKey={hoveredRowKey}
+          onTouchStart={handleTouchStart}
         />
       </div>
 

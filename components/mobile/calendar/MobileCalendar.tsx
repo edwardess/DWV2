@@ -14,6 +14,9 @@ interface MobileCalendarProps {
   onCardDrop: (day: number, month: number, year: number, imageId: string) => Promise<void>;
   activeInstance: SocialMediaInstance;
   cardsInTransit?: Set<string>; // For showing loading spinners
+  draggedCardId?: string | null;
+  hoveredRowKey?: string | null;
+  onTouchStart?: (id: string, touch: Touch) => void;
 }
 
 export default function MobileCalendar({
@@ -25,6 +28,9 @@ export default function MobileCalendar({
   onCardDrop,
   activeInstance,
   cardsInTransit = new Set(),
+  draggedCardId = null,
+  hoveredRowKey = null,
+  onTouchStart,
 }: MobileCalendarProps) {
   // Use droppedImages directly - filtering by instance is done in parent component
   // when loading from Firestore, so all images here are for the active instance
@@ -65,6 +71,9 @@ export default function MobileCalendar({
             onDrop={(imageId) => handleDrop(day, month, year, imageId)}
             maxCards={3}
             cardsInTransit={cardsInTransit}
+            draggedCardId={draggedCardId}
+            hoveredRowKey={hoveredRowKey}
+            onTouchStart={onTouchStart}
           />
         );
       })}
