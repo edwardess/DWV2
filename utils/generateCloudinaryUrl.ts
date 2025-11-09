@@ -26,7 +26,7 @@ export function generateCloudinaryURL(firebaseUrl: string, width: number = 800):
     const encoded = encodeURIComponent(url.toString());
     
     // Cloud name from environment or hardcoded for this example
-    const cloudName = 'drhqbyqnh';
+    const cloudName = 'dctmc1j3u';
     
     // Build the Cloudinary fetch URL with optimization parameters
     const params = [

@@ -43,7 +43,7 @@ export function useLocalStorage<T>({
       setStoredValue(value);
       // Save to localStorage (only in browser)
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(key, JSON.stringify(value));
+      window.localStorage.setItem(key, JSON.stringify(value));
       }
     } catch (error) {
       console.warn(`Error setting localStorage key "${key}":`, error);

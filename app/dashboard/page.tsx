@@ -11,6 +11,11 @@ const DemoWrapper = dynamicImport(() => import("@/components/pages/DemoWrapper")
   loading: () => <div className="flex items-center justify-center h-screen">Loading...</div>
 });
 
+const MobileWrapper = dynamicImport(() => import("@/components/mobile"), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-screen">Loading...</div>
+});
+
 const Sidebar = dynamicImport(() => import("@/components/pages/DemoWrapper/Sidebar"), {
   ssr: false
 });
@@ -18,6 +23,9 @@ const Sidebar = dynamicImport(() => import("@/components/pages/DemoWrapper/Sideb
 const ProjectCreationModal = dynamicImport(() => import("@/components/modals/ProjectCreationModal"), {
   ssr: false
 });
+
+// Import mobile detection hook
+import { useMobileDetection } from "@/components/mobile/hooks/useMobileDetection";
 
 import { AuthProvider, useAuth } from "@/components/services/AuthProvider";
 import { Bars3Icon } from "@heroicons/react/24/outline";
@@ -48,6 +56,13 @@ interface Project {
 function DashboardContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const isMobile = useMobileDetection();
+  const [mounted, setMounted] = useState(false);
+
+  // Track mount state to prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // The list of projects the user has access to
   const [projects, setProjects] = useState<Project[]>([]);
@@ -284,6 +299,54 @@ function DashboardContent() {
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
+  // Prevent hydration mismatch by only showing mobile/desktop after mount
+  // Render desktop view initially (matches server), then switch after hydration
+  if (!mounted) {
+    // Server render and initial client render - show desktop to prevent mismatch
+    return (
+      <div className="flex h-screen">
+        <div className="flex-1">
+          {activeProject ? (
+            <DemoWrapper projectId={activeProject.id} projectName={activeProject.name} />
+          ) : (
+            <div className="flex flex-1 items-center justify-center">
+              <p>No project selected. Please create or select a project.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Mobile view - only after client-side mount
+  if (isMobile) {
+    return (
+      <>
+        {activeProject ? (
+          <MobileWrapper
+            projectId={activeProject.id}
+            projectName={activeProject.name}
+            projects={projects}
+            onProjectSelect={handleProjectSelect}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center h-screen">
+            <p>No project selected. Please create or select a project.</p>
+          </div>
+        )}
+        {selectedMember && (
+          <ProjectCreationModal
+            visible={projectCreationModalVisible}
+            onClose={() => setProjectCreationModalVisible(false)}
+            member={selectedMember}
+            onProjectCreated={handleProjectCreated}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Desktop view
   return (
     <div className="flex h-screen">
       {/* Sidebar Container with smooth slide animation */}

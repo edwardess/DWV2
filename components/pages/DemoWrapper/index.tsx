@@ -1184,7 +1184,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
       setIsLoading(false);
     }
   };
- 
+
   // Update handleCarouselArrangementSave to ensure it uses the correct CarouselPhoto type
   const handleCarouselArrangementSave = async (arrangement: (CarouselPhoto | null)[]) => {
     if (!currentDetailsId) return; // Ensure a card is selected
@@ -1775,9 +1775,9 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
             console.log('activeInstance:', activeInstance);
             
             const modalImage = {
-              ...imageMetadata[currentDetailsId],
-              id: currentDetailsId,
-              instance: activeInstance
+            ...imageMetadata[currentDetailsId],
+            id: currentDetailsId,
+            instance: activeInstance
             } as ExtendedImageMeta;
             
             console.log('Final image prop:', modalImage);

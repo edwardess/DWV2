@@ -69,13 +69,13 @@ const ContentPool: React.FC<ContentPoolProps> = ({
       onDrop={onDrop}
     >
       <div className="flex flex-wrap gap-2">
-        <button
-          onClick={onUpload}
+      <button
+        onClick={onUpload}
           className="rounded bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 cursor-pointer flex items-center justify-center"
-        >
-          <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-          Upload Content
-        </button>
+      >
+        <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+        Upload Content
+      </button>
         {onCreateDraft && (
           <button
             onClick={onCreateDraft}

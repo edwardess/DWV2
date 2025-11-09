@@ -17,6 +17,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'files.catbox.moe',
+      },
+      {
+        protocol: 'https',
+        hostname: 'via.placeholder.com',
+      },
     ],
     // Set minimumCacheTTL to leverage caching but allow for revalidation
     minimumCacheTTL: 3600, // 1 hour in seconds

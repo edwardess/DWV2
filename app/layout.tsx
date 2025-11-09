@@ -14,6 +14,11 @@ const fontSans = FontSans({
 export const metadata: Metadata = {
   title: "DWV Calendar",
   description: "Manage your content calendar and social media assets",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -31,9 +36,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <SnackProvider>
-            <MobileRestriction>
               {children}
-            </MobileRestriction>
           </SnackProvider>
         </AuthProvider>
       </body>

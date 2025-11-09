@@ -1787,20 +1787,20 @@ const ScrollHintIndicator: React.FC = () => (
                       <div className="p-3 h-full">
                         <Card className="h-full border-none overflow-hidden shadow-sm">
                           {(editing ? editLabel : image?.label) !== "Draft" && (
-                            <CardHeader className="py-2 bg-muted/40 border-b">
-                              <div className="flex items-center justify-between">
-                                <CardTitle className="text-xs font-medium flex items-center">
-                                  <ViewColumnsIcon className="h-4 w-4 mr-1.5 text-primary" />
-                                  Content Preview
-                                  <span className="ml-2 font-normal text-muted-foreground">|</span>
-                                  <span className="ml-1.5 capitalize flex items-center">
-                                    {currentContentType === 'photo' && <PhotoIcon className="h-3.5 w-3.5 text-blue-500 mr-1" />}
-                                    {currentContentType === 'video' && <VideoCameraIcon className="h-3.5 w-3.5 text-purple-500 mr-1" />}
-                                    {currentContentType === 'reel' && <VideoCameraIcon className="h-3.5 w-3.5 text-pink-500 mr-1" />}
-                                    {currentContentType === 'carousel' && <ViewColumnsIcon className="h-3.5 w-3.5 text-orange-500 mr-1" />}
-                                    {currentContentType}
-                                  </span>
-                                </CardTitle>
+                          <CardHeader className="py-2 bg-muted/40 border-b">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-xs font-medium flex items-center">
+                                <ViewColumnsIcon className="h-4 w-4 mr-1.5 text-primary" />
+                                Content Preview
+                                <span className="ml-2 font-normal text-muted-foreground">|</span>
+                                <span className="ml-1.5 capitalize flex items-center">
+                                  {currentContentType === 'photo' && <PhotoIcon className="h-3.5 w-3.5 text-blue-500 mr-1" />}
+                                  {currentContentType === 'video' && <VideoCameraIcon className="h-3.5 w-3.5 text-purple-500 mr-1" />}
+                                  {currentContentType === 'reel' && <VideoCameraIcon className="h-3.5 w-3.5 text-pink-500 mr-1" />}
+                                  {currentContentType === 'carousel' && <ViewColumnsIcon className="h-3.5 w-3.5 text-orange-500 mr-1" />}
+                                  {currentContentType}
+                                </span>
+                              </CardTitle>
                               
                               <div className="flex items-center gap-2">
                                 {/* Download button for videos/reels */}
@@ -1828,7 +1828,7 @@ const ScrollHintIndicator: React.FC = () => (
                                 )}
                               </div>
                             </div>
-                            </CardHeader>
+                          </CardHeader>
                           )}
                           <CardContent className={`p-0 flex items-center justify-center bg-background/60 ${(editing ? editLabel : image?.label) === "Draft" ? "h-full" : "h-[calc(100%-48px)]"}`}>
                             <motion.div 
@@ -1857,24 +1857,24 @@ const ScrollHintIndicator: React.FC = () => (
                       <div className="p-4 h-full">
                         <Card className="h-full border-none overflow-hidden shadow-sm">
                           {(editing ? editLabel : image?.label) !== "Draft" && (
-                            <CardHeader className="py-2 bg-muted/40 border-b">
-                              <div className="flex items-center justify-between">
-                                <CardTitle className="text-xs font-medium flex items-center">
-                                  <PhotoIcon className="h-4 w-4 mr-1.5 text-primary" />
-                                  {editing ? "Change Thumbnail" : "Thumbnail"}
-                                </CardTitle>
-                                {image?.url && !editing && (
-                                  <button
-                                    onClick={handleThumbnailDownload}
-                                    className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
-                                    disabled={isDownloading}
-                                  >
-                                    {isDownloading ? "..." : <span>Download</span>}
-                                    <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
-                                  </button>
-                                )}
-                              </div>
-                            </CardHeader>
+                          <CardHeader className="py-2 bg-muted/40 border-b">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-xs font-medium flex items-center">
+                                <PhotoIcon className="h-4 w-4 mr-1.5 text-primary" />
+                                {editing ? "Change Thumbnail" : "Thumbnail"}
+                              </CardTitle>
+                              {image?.url && !editing && (
+                                <button
+                                  onClick={handleThumbnailDownload}
+                                  className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                  disabled={isDownloading}
+                                >
+                                  {isDownloading ? "..." : <span>Download</span>}
+                                  <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                                </button>
+                              )}
+                            </div>
+                          </CardHeader>
                           )}
                           <CardContent className={`p-4 ${(editing ? editLabel : image?.label) === "Draft" ? "h-full" : "h-[calc(100%-48px)]"}`}>
                             <RenderThirdColumn
@@ -1936,20 +1936,20 @@ const ScrollHintIndicator: React.FC = () => (
                     <div className="p-3 h-full">
                       <Card className="h-full border-none overflow-hidden shadow-sm">
                         {(editing ? editLabel : image?.label) !== "Draft" && (
-                          <CardHeader className="py-2 bg-muted/40 border-b">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-xs font-medium flex items-center">
-                                <ViewColumnsIcon className="h-4 w-4 mr-1.5 text-primary" />
-                                Content Preview
-                                <span className="ml-2 font-normal text-muted-foreground">|</span>
-                                <span className="ml-1.5 capitalize flex items-center">
-                                  {currentContentType === 'photo' && <PhotoIcon className="h-3.5 w-3.5 text-blue-500 mr-1" />}
-                                  {currentContentType === 'video' && <VideoCameraIcon className="h-3.5 w-3.5 text-purple-500 mr-1" />}
-                                  {currentContentType === 'reel' && <VideoCameraIcon className="h-3.5 w-3.5 text-pink-500 mr-1" />}
-                                  {currentContentType === 'carousel' && <ViewColumnsIcon className="h-3.5 w-3.5 text-orange-500 mr-1" />}
-                                  {currentContentType}
-                                </span>
-                              </CardTitle>
+                        <CardHeader className="py-2 bg-muted/40 border-b">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-xs font-medium flex items-center">
+                              <ViewColumnsIcon className="h-4 w-4 mr-1.5 text-primary" />
+                              Content Preview
+                              <span className="ml-2 font-normal text-muted-foreground">|</span>
+                              <span className="ml-1.5 capitalize flex items-center">
+                                {currentContentType === 'photo' && <PhotoIcon className="h-3.5 w-3.5 text-blue-500 mr-1" />}
+                                {currentContentType === 'video' && <VideoCameraIcon className="h-3.5 w-3.5 text-purple-500 mr-1" />}
+                                {currentContentType === 'reel' && <VideoCameraIcon className="h-3.5 w-3.5 text-pink-500 mr-1" />}
+                                {currentContentType === 'carousel' && <ViewColumnsIcon className="h-3.5 w-3.5 text-orange-500 mr-1" />}
+                                {currentContentType}
+                              </span>
+                            </CardTitle>
                             
                             <div className="flex items-center gap-2">
                               {/* Download button for videos/reels */}
@@ -1977,7 +1977,7 @@ const ScrollHintIndicator: React.FC = () => (
                               )}
                             </div>
                           </div>
-                          </CardHeader>
+                        </CardHeader>
                         )}
                         <CardContent className={`p-0 flex items-center justify-center bg-background/60 ${(editing ? editLabel : image?.label) === "Draft" ? "h-full" : "h-[calc(100%-48px)]"}`}>
                           <motion.div 
@@ -2006,24 +2006,24 @@ const ScrollHintIndicator: React.FC = () => (
                     <div className="p-4 h-full">
                       <Card className="h-full border-none overflow-hidden shadow-sm">
                         {(editing ? editLabel : image?.label) !== "Draft" && (
-                          <CardHeader className="py-2 bg-muted/40 border-b">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-xs font-medium flex items-center">
-                                <PhotoIcon className="h-4 w-4 mr-1.5 text-primary" />
-                                {editing ? "Change Thumbnail" : "Thumbnail"}
-                              </CardTitle>
-                              {image?.url && !editing && (
-                                <button
-                                  onClick={handleThumbnailDownload}
-                                  className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
-                                  disabled={isDownloading}
-                                >
-                                  {isDownloading ? "..." : <span>Download</span>}
-                                  <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
-                                </button>
-                              )}
-                            </div>
-                          </CardHeader>
+                        <CardHeader className="py-2 bg-muted/40 border-b">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-xs font-medium flex items-center">
+                              <PhotoIcon className="h-4 w-4 mr-1.5 text-primary" />
+                              {editing ? "Change Thumbnail" : "Thumbnail"}
+                            </CardTitle>
+                            {image?.url && !editing && (
+                              <button
+                                onClick={handleThumbnailDownload}
+                                className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white hover:opacity-90 transition-opacity select-none flex justify-between items-center"
+                                disabled={isDownloading}
+                              >
+                                {isDownloading ? "..." : <span>Download</span>}
+                                <ArrowDownTrayIcon className="h-2.5 w-2.5 ml-1.5" />
+                              </button>
+                            )}
+                          </div>
+                        </CardHeader>
                         )}
                         <CardContent className={`p-4 ${(editing ? editLabel : image?.label) === "Draft" ? "h-full" : "h-[calc(100%-48px)]"}`}>
                           <RenderThirdColumn
