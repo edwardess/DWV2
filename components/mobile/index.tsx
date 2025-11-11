@@ -38,7 +38,7 @@ interface MobileWrapperProps {
   onProjectSelect: (projectId: string) => void;
 }
 
-const DEFAULT_DRAFT_THUMBNAIL = "https://files.catbox.moe/lr6l09.png";
+const DEFAULT_DRAFT_THUMBNAIL = "https://files.catbox.moe/fp61pa.png";
 
 // Helper function to safely convert to Date
 function safelyConvertToDate(value: any): Date {

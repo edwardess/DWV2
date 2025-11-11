@@ -1272,7 +1272,7 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
               />
               <button
                 onClick={handleTodayClick}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-full hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="hidden lg:flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-full hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <svg
                   className="w-4 h-4 text-gray-600"
@@ -1305,6 +1305,17 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
             
             {/* Right group - Year Navigation Controls with Messenger and Notification */}
             <div className="flex items-center gap-3">
+              {/* Icon-only button below lg */}
+              <button
+                type="button"
+                onClick={() => setIsTodoModalOpen(true)}
+                className="lg:hidden rounded-full bg-black p-2 text-white shadow-md shadow-black/20 transition-colors hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
+                aria-label="To do list"
+              >
+                <ClipboardDocumentListIcon className="h-5 w-5" />
+              </button>
+              
+              {/* Full button above lg */}
               <button
                 type="button"
                 onClick={() => setIsTodoModalOpen(true)}
@@ -1313,6 +1324,7 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                 <ClipboardDocumentListIcon className="h-4 w-4" />
                 <span>To do list</span>
               </button>
+              
               <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-full px-3 py-2 shadow-sm">
                 <button
                   onClick={handlePrevYear}
@@ -1362,7 +1374,11 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                 projectId={projectId} 
                 projectName={projectName || "Project"} 
               />
-              {projectId && <NotificationBell projectId={projectId} />}
+              {projectId && (
+                <div className="hidden lg:block">
+                  <NotificationBell projectId={projectId} />
+                </div>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-7 gap-1.5 text-center text-[0.6rem] sm:text-[0.75rem] md:text-xs font-medium text-gray-600 mb-1.5 bg-gray-50 rounded-lg p-1 border border-gray-100">
