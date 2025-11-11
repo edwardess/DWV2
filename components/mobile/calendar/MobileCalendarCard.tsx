@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import HashLoader from "react-spinners/HashLoader";
 import Image from "next/image";
 
@@ -47,7 +47,7 @@ export default function MobileCalendarCard({
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const hasMovedRef = useRef(false);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isDragModeRef = useRef(false);
+  const [isDragMode, setIsDragMode] = useState(false);
 
   const handleDragStart = (e: React.DragEvent) => {
     // Prevent image drag (browsers try to drag the image itself)
@@ -73,12 +73,12 @@ export default function MobileCalendarCard({
     const touch = e.touches[0];
     touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
     hasMovedRef.current = false;
-    isDragModeRef.current = false;
+    setIsDragMode(false);
     
     // Start long-press timer (500ms like Android)
     longPressTimerRef.current = setTimeout(() => {
       // After 500ms, activate drag mode
-      isDragModeRef.current = true;
+      setIsDragMode(true);
       hasMovedRef.current = true; // Mark as "moved" to prevent click
       
       // Vibrate if supported (haptic feedback)
@@ -109,12 +109,13 @@ export default function MobileCalendarCard({
         clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
       }
-      
-      // Only allow dragging if we're in drag mode
-      if (isDragModeRef.current) {
-        hasMovedRef.current = true;
-        e.preventDefault(); // Prevent scrolling during drag
-      }
+    }
+    
+    // Once drag mode is active, ALWAYS prevent scrolling
+    if (isDragMode) {
+      hasMovedRef.current = true;
+      e.preventDefault(); // Prevent scrolling during drag
+      e.stopPropagation(); // Stop event from bubbling to parent scroll handlers
     }
   };
 
@@ -125,11 +126,11 @@ export default function MobileCalendarCard({
       longPressTimerRef.current = null;
     }
     
-    const wasQuickTap = !hasMovedRef.current && !isDragModeRef.current;
+    const wasQuickTap = !hasMovedRef.current && !isDragMode;
     
     touchStartPosRef.current = null;
     hasMovedRef.current = false;
-    isDragModeRef.current = false;
+    setIsDragMode(false);
     
     // If it was a quick tap, allow onClick to fire
     if (wasQuickTap) {
@@ -150,12 +151,12 @@ export default function MobileCalendarCard({
       onTouchEnd={handleTouchEnd}
       onContextMenu={(e) => e.preventDefault()}
       className={`relative w-full aspect-square rounded-lg overflow-hidden bg-gray-100 ${
-        isDragModeRef.current ? "cursor-grabbing" : "cursor-pointer"
+        isDragMode ? "cursor-grabbing" : "cursor-pointer"
       } active:opacity-75 transition-opacity border border-gray-200 ${
         isDragging ? "opacity-0" : ""
       }`}
       style={{ 
-        touchAction: "pan-y",
+        touchAction: isDragMode ? "none" : "pan-y",
         userSelect: "none",
         WebkitUserSelect: "none"
       }}

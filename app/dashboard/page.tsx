@@ -337,12 +337,12 @@ function DashboardContent() {
           <DemoWrapper 
             projectId={activeProject.id} 
             projectName={activeProject.name}
-            onProjectSelect={handleProjectSelect}
-            onOpenProjectCreation={handleOpenProjectCreation}
-            onAddMember={handleAddMember}
-            projects={projects}
-            activeProjectId={activeProjectId}
-            activeProjectMembers={activeProjectMembers}
+          onProjectSelect={handleProjectSelect}
+          onOpenProjectCreation={handleOpenProjectCreation}
+          onAddMember={handleAddMember}
+          projects={projects}
+          activeProjectId={activeProjectId}
+          activeProjectMembers={activeProjectMembers}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center">
