@@ -25,6 +25,7 @@ const ProjectCreationModal = dynamicImport(() => import("@/components/modals/Pro
 import { useMobileDetection } from "@/components/mobile/hooks/useMobileDetection";
 
 import { AuthProvider, useAuth } from "@/components/services/AuthProvider";
+import HashLoader from "react-spinners/HashLoader";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -286,10 +287,25 @@ function DashboardContent() {
       <div className="flex h-screen">
         <div className="flex-1">
           {activeProject ? (
-            <DemoWrapper projectId={activeProject.id} projectName={activeProject.name} />
+            <DemoWrapper 
+              projectId={activeProject.id} 
+              projectName={activeProject.name}
+              onProjectSelect={handleProjectSelect}
+              onOpenProjectCreation={handleOpenProjectCreation}
+              onAddMember={handleAddMember}
+              projects={projects}
+              activeProjectId={activeProjectId}
+              activeProjectMembers={activeProjectMembers}
+            />
           ) : (
-            <div className="flex flex-1 items-center justify-center">
-              <p>No project selected. Please create or select a project.</p>
+            <div className="flex flex-1 items-center justify-center bg-gray-50">
+              <div className="flex flex-col items-center gap-4">
+                <HashLoader color="#3b82f6" size={50} />
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-gray-700">No project selected</p>
+                  <p className="text-sm text-gray-500 mt-1">Please create or select a project to get started</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -309,8 +325,14 @@ function DashboardContent() {
             onProjectSelect={handleProjectSelect}
           />
         ) : (
-          <div className="flex flex-1 items-center justify-center h-screen">
-            <p>No project selected. Please create or select a project.</p>
+          <div className="flex flex-1 items-center justify-center h-screen bg-gray-50">
+            <div className="flex flex-col items-center gap-4 px-4">
+              <HashLoader color="#3b82f6" size={50} />
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-700">No project selected</p>
+                <p className="text-sm text-gray-500 mt-1">Please create or select a project to get started</p>
+              </div>
+            </div>
           </div>
         )}
         {selectedMember && (
@@ -345,8 +367,14 @@ function DashboardContent() {
           activeProjectMembers={activeProjectMembers}
           />
         ) : (
-          <div className="flex flex-1 items-center justify-center">
-            <p>No project selected. Please create or select a project.</p>
+          <div className="flex flex-1 items-center justify-center bg-gray-50">
+            <div className="flex flex-col items-center gap-4">
+              <HashLoader color="#3b82f6" size={50} />
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-700">No project selected</p>
+                <p className="text-sm text-gray-500 mt-1">Please create or select a project to get started</p>
+              </div>
+            </div>
           </div>
         )}
       </div>
