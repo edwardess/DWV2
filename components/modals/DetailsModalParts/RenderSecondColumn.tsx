@@ -931,7 +931,7 @@ import FileSaver from 'file-saver';
           <div className="flex-1 px-4 py-4 overflow-y-auto">
             { (image?.script ?? draftScript) ? (
               <article
-                className="space-y-3 text-sm leading-6 text-gray-700"
+                className="space-y-3 text-sm leading-6 text-gray-700 [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:space-y-1 [&_li]:ml-4"
                 dangerouslySetInnerHTML={{ __html: image?.script ?? draftScript }}
               />
             ) : (
