@@ -18,6 +18,9 @@ interface ContentPoolProps {
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
   className?: string;
+  draggedCardId?: string | null;
+  onDragStart?: (id: string) => void;
+  panelWidth?: number;
   items?: Array<{
     id: string;
     url: string;
@@ -38,8 +41,13 @@ const ContentPool: React.FC<ContentPoolProps> = ({
   onDragOver,
   onDrop,
   className = "",
+  draggedCardId = null,
+  onDragStart,
+  panelWidth = 240,
   items = []
 }) => {
+  const isNarrow = panelWidth <= 140;
+  
   // Calculate item heights based on view mode
   const itemHeight = poolViewMode === "full" ? 300 : 80;
   
@@ -58,45 +66,48 @@ const ContentPool: React.FC<ContentPoolProps> = ({
         onEdit={item.onEdit}
         isListView={poolViewMode === "list"}
         inTransit={item.inTransit}
+        isDragging={draggedCardId === item.id}
+        onDragStartCallback={onDragStart}
       />
     );
   };
   
   return (
     <div
-      className={`w-full h-full mt-4 flex flex-col gap-4 p-4 border border-dashed border-gray-300 rounded-lg bg-white overflow-hidden ${className}`}
+      className={`w-full h-full mt-4 flex flex-col ${isNarrow ? 'gap-2' : 'gap-4'} ${isNarrow ? 'p-2' : 'p-4'} border border-dashed border-gray-300 rounded-lg bg-white overflow-hidden ${className}`}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      style={{ minWidth: 0, maxWidth: '100%' }}
     >
-      <div className="flex flex-wrap gap-2">
+      <div className={`flex ${isNarrow ? 'flex-col' : 'flex-wrap'} ${isNarrow ? 'gap-1' : 'gap-2'} min-w-0`}>
       <button
         onClick={onUpload}
-          className="rounded bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 cursor-pointer flex items-center justify-center"
+          className={`rounded bg-gray-700 ${isNarrow ? 'px-2 py-1.5' : 'px-4 py-2'} ${isNarrow ? 'text-xs' : 'text-sm'} font-semibold text-white hover:bg-gray-800 cursor-pointer flex items-center justify-center ${isNarrow ? 'w-full' : ''} min-w-0 flex-shrink-0`}
       >
-        <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-        Upload Content
+        <CloudArrowUpIcon className={`${isNarrow ? 'h-4 w-4' : 'h-5 w-5'} ${isNarrow ? '' : 'mr-2'} flex-shrink-0`} />
+        {!isNarrow && <span className="truncate">Upload Content</span>}
       </button>
         {onCreateDraft && (
           <button
             onClick={onCreateDraft}
-            className="rounded bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 cursor-pointer flex items-center justify-center"
+            className={`rounded bg-amber-600 ${isNarrow ? 'px-2 py-1.5' : 'px-4 py-2'} ${isNarrow ? 'text-xs' : 'text-sm'} font-semibold text-white hover:bg-amber-700 cursor-pointer flex items-center justify-center ${isNarrow ? 'w-full' : ''} min-w-0 flex-shrink-0`}
           >
-            <PencilSquareIcon className="h-5 w-5 mr-2" />
-            Create Draft
+            <PencilSquareIcon className={`${isNarrow ? 'h-4 w-4' : 'h-5 w-5'} ${isNarrow ? '' : 'mr-2'} flex-shrink-0`} />
+            {!isNarrow && <span className="truncate">Create Draft</span>}
           </button>
         )}
       </div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-black">Content Library</h2>
-        <div className="flex gap-2">
+      <div className={`flex items-center justify-between ${isNarrow ? 'mb-2' : 'mb-4'} min-w-0`}>
+        <h2 className={`${isNarrow ? 'text-sm' : 'text-lg'} font-semibold text-black truncate min-w-0`}>Content Library</h2>
+        <div className={`flex ${isNarrow ? 'gap-1' : 'gap-2'}`}>
           <Squares2X2Icon
             onClick={() => setPoolViewMode("full")}
-            className={`h-6 w-6 cursor-pointer ${poolViewMode === "full" ? "text-blue-600" : "text-gray-400"}`}
+            className={`${isNarrow ? 'h-4 w-4' : 'h-6 w-6'} cursor-pointer ${poolViewMode === "full" ? "text-blue-600" : "text-gray-400"}`}
             title="Full View"
           />
           <ListBulletIcon
             onClick={() => setPoolViewMode("list")}
-            className={`h-6 w-6 cursor-pointer ${poolViewMode === "list" ? "text-blue-600" : "text-gray-400"}`}
+            className={`${isNarrow ? 'h-4 w-4' : 'h-6 w-6'} cursor-pointer ${poolViewMode === "list" ? "text-blue-600" : "text-gray-400"}`}
             title="List View"
           />
           {onRefresh && (
@@ -108,7 +119,7 @@ const ContentPool: React.FC<ContentPoolProps> = ({
                 strokeWidth={1.5}
                 stroke="currentColor"
                 onClick={onRefresh}
-                className="h-6 w-6 cursor-pointer text-gray-400 hover:text-blue-600"
+                className={`${isNarrow ? 'h-4 w-4' : 'h-6 w-6'} cursor-pointer text-gray-400 hover:text-blue-600`}
                 aria-label="Refresh Content"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />

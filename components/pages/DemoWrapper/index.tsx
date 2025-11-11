@@ -46,6 +46,7 @@ import {
 import { debounce, debounceWithCancel } from '@/utils/debounce';
 import { UserIcon } from "@heroicons/react/24/solid";
 import EditProfileModal from "@/components/modals/EditProfileModal";
+import Sidebar from "./Sidebar";
 
 // Helper function to sanitize objects for Firestore
 function sanitizeForFirestore(obj: any): any {
@@ -181,6 +182,28 @@ export interface ImageMeta {
 interface DemoWrapperProps {
   projectId: string; // Must be non-empty when a project is selected
   projectName?: string;
+  // Sidebar props
+  onProjectSelect: (projectId: string) => void;
+  onOpenProjectCreation: (user: {
+    uid: string;
+    email: string;
+    displayName: string;
+    photoURL?: string;
+  }) => void;
+  onAddMember: (user: {
+    uid: string;
+    email: string;
+    displayName: string;
+    photoURL?: string;
+  }) => Promise<void>;
+  projects: { id: string; name: string; createdAt?: any }[];
+  activeProjectId?: string;
+  activeProjectMembers?: Array<{
+    uid: string;
+    email: string;
+    displayName: string;
+    photoURL?: string;
+  }>;
 }
 
 async function uploadFile(file: File): Promise<string> {
@@ -212,7 +235,16 @@ async function uploadFile(file: File): Promise<string> {
   });
 }
 
-export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps) {
+export default function DemoWrapper({ 
+  projectId, 
+  projectName,
+  onProjectSelect,
+  onOpenProjectCreation,
+  onAddMember,
+  projects,
+  activeProjectId,
+  activeProjectMembers
+}: DemoWrapperProps) {
   const { createSnack } = useSnack();
   const { user, logout } = useAuth();
 
@@ -243,7 +275,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
 
   const [contentPoolVisible, setContentPoolVisible] = useLocalStorage({
     key: "contentPoolVisible",
-    defaultValue: true,
+    defaultValue: false,
     validator: isBoolean
   });
   
@@ -254,9 +286,14 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
     }
   }, [projectId, selectedProjectId, setSelectedProjectId]);
 
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [sidebarVisible, setSidebarVisible] = useLocalStorage({
+    key: "sidebarVisible",
+    defaultValue: false,
+    validator: isBoolean
+  });
   const [imageMetadata, setImageMetadata] = useState<{ [id: string]: ImageMeta }>({});
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [currentDetailsId, setCurrentDetailsId] = useState<string>("");
   const [detailsEditMode, setDetailsEditMode] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -265,6 +302,50 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [detailsEditAttachments, setDetailsEditAttachments] = useState<Attachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Track calendar container width
+  const calendarContainerRef = useRef<HTMLDivElement | null>(null);
+  const [calendarWidth, setCalendarWidth] = useState<number | null>(null);
+  // Responsive sidebar widths - unified for symmetry
+  const [panelWidth, setPanelWidth] = useState<number>(240);
+  const [contentPoolWidth, setContentPoolWidth] = useState<number>(260);
+
+  useEffect(() => {
+    const computePanelWidths = () => {
+      const w = typeof window !== 'undefined' ? window.innerWidth : 1920;
+      // Three-tier system:
+      // >=1536px: 240px (sidebar), 260px (content pool)
+      // 1280px-1535px: 180px (sidebar), 200px (content pool) - moderately narrow
+      // <1280px: 120px (sidebar), 140px (content pool) - very narrow
+      if (w >= 1536) {
+        setPanelWidth(240);
+        setContentPoolWidth(260);
+      } else if (w >= 1280) {
+        setPanelWidth(180);
+        setContentPoolWidth(200);
+      } else {
+        setPanelWidth(120);
+        setContentPoolWidth(140);
+      }
+    };
+    computePanelWidths();
+    window.addEventListener('resize', computePanelWidths);
+    return () => window.removeEventListener('resize', computePanelWidths);
+  }, []);
+
+  useEffect(() => {
+    if (!calendarContainerRef.current) return;
+    const el = calendarContainerRef.current;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const cw = entry.contentRect.width;
+        setCalendarWidth(cw);
+      }
+    });
+    observer.observe(el);
+    // Set initial
+    setCalendarWidth(el.clientWidth);
+    return () => observer.disconnect();
+  }, []);
 
   // Track IDs of invalid entries we've already cleaned up
   const cleanedInvalidIdsRef = useRef<Set<string>>(new Set());
@@ -1582,15 +1663,24 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative">
+      {/* Permanent dimmed background layer - base layer */}
+      <div className="absolute inset-0 bg-black/30 z-0 pointer-events-none" />
+      
       {isLoading && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-50">
           <HashLoader color="white" loading={isLoading} size={150} />
         </div>
       )}
       <div className="flex flex-col min-h-screen w-full overflow-hidden">
-        <div className="p-2 sm:p-3 md:p-4 bg-white border-b border-gray-200 shadow-sm">
+        <div className="relative z-10 p-2 sm:p-3 md:p-4 bg-white border-b border-gray-200 shadow-sm">
           <div className="mb-1 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            {/* Logo on the left */}
+            <div className="flex items-center">
+              <img src="/DWV2.png" alt="Logo" className="w-40" />
+            </div>
+            
+            {/* Title centered */}
+            <div className="flex-1 flex justify-center">
               <h2 className="text-xl font-bold">
                 Content Calendar {projectName ? `- ${projectName}` : ""}
               </h2>
@@ -1651,8 +1741,55 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
           {/* Social media switcher moved into the calendar component */}
         </div>
         <div className="flex flex-row w-full h-full gap-4 relative">
-          <div className={`relative h-full overflow-auto mt-4 flex-1 ml-4 transition-all duration-300`} 
-               style={{ maxWidth: contentPoolVisible ? "calc(100% - 288px)" : "100%" }}>
+          {/* Sidebar with transition */}
+          <div className={`relative z-10 mt-4 transition-all duration-300 ease-in-out ${sidebarVisible ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`}
+               style={{ width: sidebarVisible ? `${panelWidth}px` : "0", overflow: "hidden" }}>
+            <Sidebar
+              onProjectSelect={onProjectSelect}
+              onOpenProjectCreation={onOpenProjectCreation}
+              onAddMember={onAddMember}
+              projects={projects}
+              activeProjectId={activeProjectId}
+              activeProjectMembers={activeProjectMembers}
+              onToggleSidebar={() => setSidebarVisible(!sidebarVisible)}
+              panelWidth={panelWidth}
+            />
+          </div>
+          
+          {/* Sidebar toggle button */}
+          <button 
+            onClick={() => setSidebarVisible(!sidebarVisible)}
+            className="absolute z-50 bg-white rounded-r-md p-2 shadow-md border border-gray-300 border-l-0 hover:bg-gray-50 flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ 
+              left: sidebarVisible ? `${panelWidth}px` : "0",
+              top: "50%", 
+              transform: "translateY(-50%)",
+              transition: "left 0.3s ease-in-out",
+              width: "32px",
+              height: "80px"
+            }}
+            aria-label={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+            title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+          >
+            {sidebarVisible ? 
+              <ChevronLeftIcon className="h-5 w-5 text-gray-600" /> : 
+              <ChevronRightIcon className="h-5 w-5 text-gray-600" />
+            }
+          </button>
+          
+          <div ref={calendarContainerRef} className={`relative h-full overflow-auto mt-4 flex-1 transition-all duration-300`} 
+               style={{ 
+                 maxWidth: sidebarVisible && contentPoolVisible 
+                  ? `calc(100% - ${panelWidth}px - ${contentPoolWidth}px - 16px)` 
+                  : sidebarVisible 
+                    ? `calc(100% - ${panelWidth}px - 8px)` 
+                    : contentPoolVisible 
+                      ? `calc(100% - ${contentPoolWidth}px - 8px)` 
+                      : "100%"
+               }}>
+            {/* Lighter dimming layer for calendar area */}
+            <div className="absolute inset-0 bg-black/5 z-0 pointer-events-none" />
+            
             <ContinuousCalendar
               onClick={(day, month, year) => {
                 const msg = `Clicked on ${monthNames[month]} ${day}, ${year}`;
@@ -1666,9 +1803,12 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
               activeInstance={activeInstance}
               onInstanceChange={setActiveInstance}
               cardsInTransit={cardsInTransit}
-              expandedView={!contentPoolVisible}
+              expandedView={!sidebarVisible && !contentPoolVisible}
               projectId={projectId}
               projectName={projectName}
+              draggedCardId={draggedCardId}
+              setDraggedCardId={setDraggedCardId}
+              calendarWidth={calendarWidth ?? undefined}
             />
           </div>
           
@@ -1677,7 +1817,7 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
             onClick={() => setContentPoolVisible(!contentPoolVisible)}
             className="absolute z-50 bg-white rounded-l-md p-2 shadow-md border border-gray-300 border-r-0 hover:bg-gray-50 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
             style={{ 
-              right: contentPoolVisible ? "280px" : "0",
+              right: contentPoolVisible ? `${contentPoolWidth}px` : "0",
               top: "50%", 
               transform: "translateY(-50%)",
               transition: "right 0.3s ease-in-out",
@@ -1695,13 +1835,14 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
           
           {/* Content Pool with transition */}
           <div className={`transition-all duration-300 ease-in-out ${contentPoolVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}
-               style={{ width: contentPoolVisible ? "280px" : "0", overflow: "hidden" }}>
+               style={{ width: contentPoolVisible ? `${contentPoolWidth}px` : "0", overflow: "hidden" }}>
             <ContentPool
               poolViewMode={poolViewMode}
               setPoolViewMode={setPoolViewMode}
               onUpload={() => setUploadModalOpen(true)}
               onCreateDraft={() => setDraftModalOpen(true)}
               onRefresh={forceReloadData}
+              panelWidth={contentPoolWidth}
               renderPoolImages={() =>
                 poolViewMode === "full"
                   ? poolImages.map(({ id, url }) => (
@@ -1742,6 +1883,8 @@ export default function DemoWrapper({ projectId, projectName }: DemoWrapperProps
               onDragOver={(e) => e.preventDefault()}
               onDrop={handlePoolDrop}
               className="w-[280px] min-w-[280px]"
+              draggedCardId={draggedCardId}
+              onDragStart={setDraggedCardId}
             />
           </div>
         </div>

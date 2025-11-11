@@ -16,9 +16,6 @@ const MobileWrapper = dynamicImport(() => import("@/components/mobile"), {
   loading: () => <div className="flex items-center justify-center h-screen">Loading...</div>
 });
 
-const Sidebar = dynamicImport(() => import("@/components/pages/DemoWrapper/Sidebar"), {
-  ssr: false
-});
 
 const ProjectCreationModal = dynamicImport(() => import("@/components/modals/ProjectCreationModal"), {
   ssr: false
@@ -28,7 +25,6 @@ const ProjectCreationModal = dynamicImport(() => import("@/components/modals/Pro
 import { useMobileDetection } from "@/components/mobile/hooks/useMobileDetection";
 
 import { AuthProvider, useAuth } from "@/components/services/AuthProvider";
-import { Bars3Icon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -84,16 +80,6 @@ function DashboardContent() {
     displayName: string;
     photoURL?: string;
   } | null>(null);
-  // State to control sidebar visibility
-  const [sidebarVisible, setSidebarVisible] = useState<boolean>(() => {
-    // Try to get the saved preference from localStorage
-    if (typeof window !== 'undefined') {
-      const savedPreference = localStorage.getItem("sidebarVisible");
-      // If there's a saved preference, use it; otherwise default to true
-      return savedPreference !== null ? savedPreference === "true" : true;
-    }
-    return true;
-  });
 
   // Redirect to sign in if not logged in
   useEffect(() => {
@@ -277,13 +263,6 @@ function DashboardContent() {
     }
   };
 
-  // Toggle sidebar visibility
-  const toggleSidebar = () => setSidebarVisible((prev) => !prev);
-
-  // When sidebarVisible changes, update localStorage
-  useEffect(() => {
-    localStorage.setItem("sidebarVisible", sidebarVisible.toString());
-  }, [sidebarVisible]);
 
   if (loading) return (
     <div className="flex h-screen items-center justify-center">
@@ -349,39 +328,22 @@ function DashboardContent() {
   // Desktop view
   return (
     <div className="flex h-screen">
-      {/* Sidebar Container with smooth slide animation */}
-      <div
-        className={`transition-transform duration-300 ${
-          sidebarVisible ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <Sidebar
-          onProjectSelect={handleProjectSelect}
-          onOpenProjectCreation={handleOpenProjectCreation}
-          onAddMember={handleAddMember}
-          projects={projects}
-          activeProjectId={activeProjectId}
-          activeProjectMembers={activeProjectMembers}
-          onToggleSidebar={toggleSidebar}
-        />
-      </div>
-      
-      {/* Show toggle button when sidebar is hidden */}
-      {!sidebarVisible && (
-        <button
-          onClick={toggleSidebar}
-          className="absolute left-4 top-4 z-20 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 border border-gray-300 transition-colors"
-          aria-label="Show sidebar"
-          title="Show sidebar"
-        >
-          <Bars3Icon className="h-5 w-5 text-gray-600" />
-        </button>
-      )}
+      {/* Permanent dimmed background layer - base layer */}
+      <div className="fixed inset-0 bg-black/30 z-0 pointer-events-none" />
       
       {/* Main Content */}
-      <div className="flex-1">
+      <div className="flex-1 w-full">
         {activeProject ? (
-          <DemoWrapper projectId={activeProject.id} projectName={activeProject.name} />
+          <DemoWrapper 
+            projectId={activeProject.id} 
+            projectName={activeProject.name}
+            onProjectSelect={handleProjectSelect}
+            onOpenProjectCreation={handleOpenProjectCreation}
+            onAddMember={handleAddMember}
+            projects={projects}
+            activeProjectId={activeProjectId}
+            activeProjectMembers={activeProjectMembers}
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <p>No project selected. Please create or select a project.</p>

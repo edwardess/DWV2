@@ -12,6 +12,8 @@ interface ContentPoolImageProps {
   onEdit?: () => void;
   title?: string;
   inTransit?: boolean;
+  isDragging?: boolean;
+  onDragStartCallback?: (id: string) => void;
 }
 
 const ContentPoolImage: React.FC<ContentPoolImageProps> = ({ 
@@ -23,7 +25,9 @@ const ContentPoolImage: React.FC<ContentPoolImageProps> = ({
   label = "",
   onEdit,
   title = "",
-  inTransit = false
+  inTransit = false,
+  isDragging = false,
+  onDragStartCallback
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -257,10 +261,11 @@ const ContentPoolImage: React.FC<ContentPoolImageProps> = ({
           e.dataTransfer.setData("imageId", id);
           e.dataTransfer.setData("sourceKey", "pool");
           startCooldown();
+          onDragStartCallback?.(id);
         }}
         className={`flex items-center gap-2 p-2 shadow-lg rounded bg-white border-b border-gray-300 mb-2 user-select-none ${
           isInCooldown ? 'cursor-wait' : 'cursor-move'
-        }`}
+        } ${isDragging ? "opacity-0" : ""}`}
         title={isInCooldown ? "Please wait before moving again" : ""}
       >
         <ImageErrorBoundary>
@@ -315,10 +320,11 @@ const ContentPoolImage: React.FC<ContentPoolImageProps> = ({
         e.dataTransfer.setData("imageId", id);
         e.dataTransfer.setData("sourceKey", "pool");
         startCooldown();
+        onDragStartCallback?.(id);
       }}
       className={`relative rounded-lg shadow-xl p-4 bg-gray-100 border border-[#047AC0] mb-4 user-select-none ${
         isInCooldown ? 'cursor-wait' : 'cursor-move'
-      }`}
+      } ${isDragging ? "opacity-0" : ""}`}
       title={isInCooldown ? "Please wait before moving again" : ""}
     >
       <div className="p-2">

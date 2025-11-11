@@ -27,6 +27,7 @@ import MobileCalendar from "./calendar/MobileCalendar";
 import MobileUploadModal from "./modals/MobileUploadModal";
 import MobileDetailsModal from "./modals/MobileDetailsModal";
 import MobileDraftModal from "./modals/MobileDraftModal";
+import MobileTodoListModal from "./modals/MobileTodoListModal";
 import HashLoader from "react-spinners/HashLoader";
 import Image from "next/image";
 
@@ -117,6 +118,7 @@ export default function MobileWrapper({
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [todoModalOpen, setTodoModalOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [draftModalOpen, setDraftModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -713,6 +715,7 @@ export default function MobileWrapper({
           setCurrentMonth(month);
           setCurrentYear(year);
         }}
+        onTodoClick={() => setTodoModalOpen(true)}
         onUploadClick={() => setUploadModalOpen(true)}
         onWriteClick={() => setDraftModalOpen(true)}
         onBurgerClick={() => setSidebarVisible(true)}
@@ -763,6 +766,14 @@ export default function MobileWrapper({
         onCreateDraft={handleCreateDraft}
         currentMonth={currentMonth}
         currentYear={currentYear}
+      />
+
+      <MobileTodoListModal
+        visible={todoModalOpen}
+        onClose={() => setTodoModalOpen(false)}
+        projectId={selectedProjectId}
+        projectName={projectName}
+        activeYear={currentYear}
       />
 
       {currentImage && (

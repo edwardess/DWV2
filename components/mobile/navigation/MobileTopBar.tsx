@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Bars3Icon, ArrowUpTrayIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
+import { Bars3Icon, ArrowUpTrayIcon, PencilSquareIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 
 const monthNames = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -12,6 +12,7 @@ interface MobileTopBarProps {
   currentMonth: number;
   currentYear: number;
   onMonthChange: (month: number, year: number) => void;
+  onTodoClick: () => void;
   onUploadClick: () => void;
   onWriteClick: () => void;
   onBurgerClick: () => void;
@@ -21,6 +22,7 @@ export default function MobileTopBar({
   currentMonth,
   currentYear,
   onMonthChange,
+  onTodoClick,
   onUploadClick,
   onWriteClick,
   onBurgerClick,
@@ -62,6 +64,15 @@ export default function MobileTopBar({
               </option>
             ))}
           </select>
+
+          {/* To-Do List Icon */}
+          <button
+            onClick={onTodoClick}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Open to-do list"
+          >
+            <ClipboardDocumentListIcon className="h-6 w-6 text-gray-700" />
+          </button>
 
           {/* Upload Icon */}
           <button

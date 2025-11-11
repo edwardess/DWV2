@@ -4,12 +4,13 @@
 
 import React, { useEffect, useMemo, useRef, useState, useContext, createContext } from "react";
 import { ImageMeta } from "@/components/pages/DemoWrapper"; // Adjust import path as needed
-import { EyeIcon, CheckCircleIcon, ArrowPathIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { EyeIcon, CheckCircleIcon, ArrowPathIcon, ClockIcon, PencilIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import Image from "next/image"; // <-- Added for Next.js image optimization
 import { generateCloudinaryURL } from "@/utils/generateCloudinaryUrl"; // Import Cloudinary utility
 import { SocialMediaSwitch, type SocialMediaInstance } from "@/components/ui/social-media-switch";
 import { MessengerButton } from "@/components/ui/messenger-button";
 import { NotificationBell } from '@/components/common/notifications/NotificationBell';
+import TodoListModal from "./TodoList/TodoListModal";
 
 // Add an image cache context
 interface ImageCacheContextType {
@@ -163,6 +164,10 @@ interface ContinuousCalendarProps {
   cardsInTransit?: Set<string>;
   // Add new prop for expanded view
   expandedView?: boolean;
+  draggedCardId?: string | null;
+  setDraggedCardId?: (id: string | null) => void;
+  // Actual calendar container width (from DemoWrapper)
+  calendarWidth?: number;
 }
 
 // Add a simple spinner component
@@ -286,7 +291,7 @@ const ImageWithLoading = ({ src, alt }: { src: string; alt: string }) => {
               objectFit: "contain", 
               objectPosition: "center",
               borderRadius: "8px", 
-              border: "2px solid #047AC0",
+              border: "2px solid #374151",
               WebkitUserSelect: "none",
               MozUserSelect: "none",
               msUserSelect: "none",
@@ -534,6 +539,9 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
   onInstanceChange,
   cardsInTransit = new Set(), // Default to empty set
   expandedView = false, // Default to false
+  draggedCardId: propDraggedCardId,
+  setDraggedCardId: propSetDraggedCardId,
+  calendarWidth,
 }) => {
   const { cache, addToCache, getFromCache } = useImageCache();
   const today = new Date();
@@ -544,9 +552,29 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
   const [processingApprovalIds, setProcessingApprovalIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [processingCards, setProcessingCards] = useState<Set<string>>(new Set());
+  const [localDraggedCardId, setLocalDraggedCardId] = useState<string | null>(null);
+  const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isTodoModalOpen, setIsTodoModalOpen] = useState(false);
+  const draggedCardId = propSetDraggedCardId ? (propDraggedCardId ?? null) : localDraggedCardId;
+  const setDraggedCardId = propSetDraggedCardId || setLocalDraggedCardId;
+
+  // Derive responsive flags based on actual container width
+  const isTight = typeof calendarWidth === 'number' ? calendarWidth < 760 : false;
+  const isNarrow = typeof calendarWidth === 'number' ? calendarWidth < 900 : false;
   useEffect(() => {
     setTooltipVisible({});
   }, [projectId]);
+
+  useEffect(() => {
+    const handleDragEnd = () => {
+      setDraggedCardId(null);
+      setHoveredCellKey(null);
+      setDragPosition(null);
+    };
+    document.addEventListener('dragend', handleDragEnd);
+    return () => document.removeEventListener('dragend', handleDragEnd);
+  }, []);
   const monthOptions = monthNames.map((month, index) => ({
     name: month,
     value: `${index}`,
@@ -718,7 +746,31 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
               data-month={month}
               data-day={day}
               onClick={() => handleDayClick(day, month, year)}
-              onDragOver={(e) => e.preventDefault()}
+              onDrag={(e) => {
+                if (draggedCardId) {
+                  setDragPosition({ x: e.clientX, y: e.clientY });
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                const isFull = groupedDroppedImages?.[dayKey]?.length >= 4;
+                if (!isFull && month >= 0) {
+                  setHoveredCellKey(dayKey);
+                } else {
+                  setHoveredCellKey(null);
+                }
+                if (draggedCardId) {
+                  setDragPosition({ x: e.clientX, y: e.clientY });
+                }
+              }}
+              onDragLeave={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX;
+                const y = e.clientY;
+                if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+                  setHoveredCellKey(null);
+                }
+              }}
               onDrop={(e) => {
                 e.preventDefault();
                 // Reject drop if cell already has 4 cards
@@ -735,8 +787,11 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                 if (onImageDrop && month >= 0) {
                   handleDrop(e, day, month, year);
                 }
+                setDraggedCardId(null);
+                setHoveredCellKey(null);
+                setDragPosition(null);
               }}
-              className={`relative z-10 group aspect-square grow rounded-xl border lg:rounded-2xl font-medium transition-all hover:z-20 hover:border-cyan-400 p-1
+              className={`relative z-10 group aspect-square grow rounded-xl border-2 lg:rounded-2xl font-medium transition-all hover:z-20 hover:border-cyan-400 p-1
                 ${isToday 
                   ? 'border-2 border-blue-500 shadow-md bg-gradient-to-br from-blue-50 to-white z-20' 
                   : 'border-gray-300'}
@@ -765,6 +820,12 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                 <span className={`z-30 absolute bottom-0.5 left-0 w-full truncate px-1.5 text-[0.5rem] sm:text-[0.6rem] md:text-[0.75rem] lg:text-lg font-semibold ${isToday ? 'text-blue-600' : 'text-slate-500'} select-none`}>
                   {monthNames[month]}
                 </span>
+              )}
+              {/* Drop Zone Indicator */}
+              {hoveredCellKey === dayKey && draggedCardId && month >= 0 && (
+                <div className="absolute inset-0 flex items-center justify-center border-2 border-dashed border-blue-400 bg-blue-50/50 rounded-xl z-20 pointer-events-none">
+                  <span className="text-blue-600 font-medium text-sm">drop here</span>
+                </div>
               )}
               {month >= 0 &&
                 groupedDroppedImages &&
@@ -807,11 +868,13 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                             onDragStart={(e) => {
                               e.dataTransfer.setData("imageId", card.id);
                               e.dataTransfer.setData("sourceKey", dayKey);
+                              setDraggedCardId(card.id);
+                              setDragPosition({ x: e.clientX, y: e.clientY });
                             }}
-                            className={`w-[90%] h-[90%] relative user-select-none ${isToday 
-                              ? 'bg-blue-50 darkest-shadow rounded-xl border-[1.5px] border-blue-300 flex overflow-hidden cursor-grab hover:scale-105 transition-all duration-200' 
+                            className={`w-[90%] h-[85%] lg:h-[80%] xl:h-[85%] relative user-select-none ${isToday 
+                              ? 'bg-gray-50 darkest-shadow rounded-xl border-[1.5px] border-gray-400 flex overflow-hidden cursor-grab hover:scale-105 transition-all duration-200' 
                               : 'bg-[#f5f5f4] darker-shadow rounded-xl border border-gray-300 flex overflow-hidden cursor-grab hover:scale-105 transition-transform duration-200'
-                            }`}
+                            } ${draggedCardId === card.id ? "opacity-0" : ""}`}
                           >
                             {/* Add processing overlay */}
                             {processingCards.has(card.id) && (
@@ -910,7 +973,7 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                               return null;
                             })()}
                             
-                            <div className="w-2/5 2xl:w-1/2 flex flex-col justify-center items-start p-1 pl-3">
+                            <div className={`${isTight ? 'w-full order-1' : 'w-2/5 lg:w-3/5 xl:w-1/2'} flex flex-col justify-center items-start p-1 pl-3`}>
                               {(() => {
                                 if (imageMetadata && imageMetadata[card.id]) {
                                   const cardLabel = imageMetadata[card.id]?.label;
@@ -948,16 +1011,17 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                                   e.stopPropagation();
                                   onSeeDetails && onSeeDetails(card.id);
                                 }}
-                                className="mt-1 bg-gray-700 hover:bg-gray-800 text-white px-1 2xl:px-2 py-1 rounded-md text-[0.2rem] sm:text-[0.22rem] md:text-[0.35rem] lg:text-[0.62rem] font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1"
+                                className={`mt-1 bg-gray-700 hover:bg-gray-800 text-white px-1 lg:px-2 py-1 rounded-md text-[0.2rem] sm:text-[0.22rem] md:text-[0.35rem] lg:text-[0.62rem] font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1 ${isTight ? 'w-full justify-center' : ''}`}
                               >
-                                <span className="hidden 2xl:inline">
-                                  View
+                                <span className="hidden lg:inline">
+                                  Open
                                 </span>
-                                <EyeIcon className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
+                                <PencilIcon className="lg:hidden h-3 w-3 flex-shrink-0" />
+                                <EyeIcon className="hidden 2xl:block h-3 w-3 lg:h-3.5 lg:w-3.5" />
                               </button>
                             </div>
-                            <div className="w-3/5 2xl:w-1/2 flex items-center justify-center p-1">
-                              <div className="w-full h-full p-1 pt-3 pb-3 flex items-center justify-center overflow-visible">
+                            <div className={`${isTight ? 'w-full order-2' : 'w-3/5 lg:w-2/5 xl:w-1/2'} flex items-center justify-center p-1`}>
+                              <div className="w-full h-full p-1 lg:pt-2 lg:pb-2 xl:pt-3 xl:pb-3 flex items-center justify-center overflow-visible">
                                 <ImageWithLoading 
                                   key={`${projectId}-${card.id}`} 
                                   src={card.url} 
@@ -971,7 +1035,7 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                         // More than one card: render vertical list (limit max cards to 4)
                         const limitedCards = cards.slice(0, 4);
                         return (
-                          <div className="w-[90%] h-[90%] flex flex-col space-y-1 overflow-auto">
+                          <div className="w-[90%] h-[85%] lg:h-[80%] xl:h-[85%] flex flex-col space-y-1 overflow-auto">
                             {/* Add month and day header for multi-card view */}
                             <div className="w-full flex justify-center mb-1">
                               <div className="px-2 py-0.5 rounded-full text-[0.6rem] font-semibold bg-white border border-gray-300 shadow-sm">
@@ -993,11 +1057,13 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData("imageId", card.id);
                                   e.dataTransfer.setData("sourceKey", dayKey);
+                                  setDraggedCardId(card.id);
+                                  setDragPosition({ x: e.clientX, y: e.clientY });
                                 }}
                                 className={`w-full relative user-select-none ${isToday 
                                   ? 'bg-blue-50 darkest-shadow rounded-xl border-[1.5px] border-blue-300 flex overflow-hidden cursor-grab hover:scale-105 transition-all duration-200' 
                                   : 'bg-[#f5f5f4] darker-shadow rounded-xl border border-gray-300 flex overflow-hidden cursor-grab hover:scale-105 transition-transform duration-200'
-                                }`}
+                                } ${draggedCardId === card.id ? "opacity-0" : ""}`}
                                 style={{ height: "30%" }}
                               >
                                 {/* Add processing overlay */}
@@ -1098,7 +1164,7 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                                   return null;
                                 })()}
                                 
-                                <div className="w-2/5 2xl:w-1/2 flex flex-col justify-center items-start p-1 pl-3">
+                                <div className={`${isTight ? 'w-full order-1' : 'w-2/5 lg:w-3/5 xl:w-1/2'} flex flex-col justify-center items-start p-1 pl-3`}>
                                   {(() => {
                                     if (imageMetadata && imageMetadata[card.id]) {
                                       const cardLabel = imageMetadata[card.id]?.label;
@@ -1126,16 +1192,17 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
                                       e.stopPropagation();
                                       onSeeDetails && onSeeDetails(card.id);
                                     }}
-                                    className="mt-1 bg-gray-700 hover:bg-gray-800 text-white px-1 2xl:px-2 py-1 rounded-md text-[0.2rem] sm:text-[0.22rem] md:text-[0.35rem] lg:text-[0.62rem] font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1"
+                                    className={`mt-1 bg-gray-700 hover:bg-gray-800 text-white px-1 lg:px-2 py-1 rounded-md text-[0.2rem] sm:text-[0.22rem] md:text-[0.35rem] lg:text-[0.62rem] font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1 ${isTight ? 'w-full justify-center' : ''}`}
                                   >
-                                    <span className="hidden 2xl:inline">
-                                      View
+                                    <span className="hidden lg:inline">
+                                      Open
                                     </span>
-                                    <EyeIcon className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
+                                    <PencilIcon className="lg:hidden h-3 w-3 flex-shrink-0" />
+                                    <EyeIcon className="hidden 2xl:block h-3 w-3 lg:h-3.5 lg:w-3.5" />
                                   </button>
                                 </div>
-                                <div className="w-3/5 2xl:w-1/2 flex items-center justify-center p-1">
-                                  <div className="w-full h-full p-1 flex items-center justify-center overflow-visible">
+                                <div className={`${isTight ? 'w-full order-2' : 'w-3/5 lg:w-2/5 xl:w-1/2'} flex items-center justify-center p-1`}>
+                                  <div className="w-full h-full p-1 lg:pt-2 lg:pb-2 xl:pt-3 xl:pb-3 flex items-center justify-center overflow-visible">
                                     <ImageWithLoading 
                                       key={`${projectId}-${card.id}`} 
                                       src={card.url} 
@@ -1238,6 +1305,14 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
             
             {/* Right group - Year Navigation Controls with Messenger and Notification */}
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsTodoModalOpen(true)}
+                className="hidden lg:flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white shadow-md shadow-black/20 transition-colors hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
+              >
+                <ClipboardDocumentListIcon className="h-4 w-4" />
+                <span>To do list</span>
+              </button>
               <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-full px-3 py-2 shadow-sm">
                 <button
                   onClick={handlePrevYear}
@@ -1300,6 +1375,56 @@ export const ContinuousCalendar: React.FC<ContinuousCalendarProps> = ({
         </div>
         <div className="px-4 sm:px-6 md:px-8 pt-4">{generateCalendar}</div>
       </div>
+      {/* Floating Dragged Card */}
+      {draggedCardId && dragPosition && imageMetadata?.[draggedCardId] && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{
+            left: `${dragPosition.x}px`,
+            top: `${dragPosition.y}px`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-gray-100 opacity-60 scale-110 shadow-2xl border-2 border-blue-400">
+            {/* Status Indicator */}
+            <div className="absolute top-1 left-1/2 transform -translate-x-1/2 z-10">
+              <div
+                className={`w-3 h-3 rounded-full border-2 border-white shadow-sm ${
+                  !imageMetadata[draggedCardId].label
+                    ? "bg-gray-400"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "approved"
+                    ? "bg-green-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "draft"
+                    ? "bg-amber-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "needs revision"
+                    ? "bg-red-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "ready for approval"
+                    ? "bg-blue-500"
+                    : imageMetadata[draggedCardId].label.toLowerCase() === "scheduled"
+                    ? "bg-purple-500"
+                    : "bg-gray-400"
+                }`}
+              />
+            </div>
+            {/* Image */}
+            <Image
+              src={imageMetadata[draggedCardId].url}
+              alt={imageMetadata[draggedCardId].title || "Content"}
+              fill
+              className="object-cover"
+              sizes="96px"
+              draggable={false}
+            />
+          </div>
+        </div>
+      )}
+      <TodoListModal
+        visible={isTodoModalOpen}
+        onClose={() => setIsTodoModalOpen(false)}
+        projectId={projectId}
+        projectName={projectName}
+        activeYear={year}
+      />
     </ImageCacheProvider>
   );
 };
