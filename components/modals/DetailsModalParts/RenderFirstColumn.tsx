@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 // Import separated parts from DetailsModalParts folder
 import ExpandableText from "./ExpandableText";
@@ -77,6 +78,8 @@ interface RenderFirstColumnProps {
   firstColumnRef: React.RefObject<HTMLDivElement>;
   showScrollIndicator: boolean;
   user: any;
+  localWorkingOnIt?: boolean;
+  setLocalWorkingOnIt?: (value: boolean) => void;
 }
 
 const RenderFirstColumn: React.FC<RenderFirstColumnProps> = ({
@@ -109,6 +112,8 @@ const RenderFirstColumn: React.FC<RenderFirstColumnProps> = ({
   firstColumnRef,
   showScrollIndicator,
   user,
+  localWorkingOnIt,
+  setLocalWorkingOnIt,
 }) => {
   // Handle description and caption changes
   const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -332,6 +337,29 @@ const RenderFirstColumn: React.FC<RenderFirstColumnProps> = ({
                       </Select>
                     </div>
                   </div>
+
+                  {/* Working On It - Only show for Draft status */}
+                  {(editing ? editLabel : image?.label) === "Draft" && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium flex items-center">
+                        <TagIcon className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                        Working on it
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={localWorkingOnIt ?? false}
+                          onCheckedChange={(checked) => {
+                            setLocalWorkingOnIt?.(checked);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          type="button"
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {localWorkingOnIt ? "Yes, working on it" : "Not yet"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -380,6 +408,19 @@ const RenderFirstColumn: React.FC<RenderFirstColumnProps> = ({
                         {image?.label || "N/A"}
                       </Badge>
                     </div>
+                    
+                    {/* Working On It - Only show for Draft status */}
+                    {image?.label === "Draft" && (
+                      <>
+                        <div className="font-medium text-sm flex items-center">
+                          <TagIcon className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          Working on it:
+                        </div>
+                        <div className="text-sm">
+                          {image?.workingonit ? "Yes, working on it" : "Not yet"}
+                        </div>
+                      </>
+                    )}
                     
                     <div className="font-medium text-sm flex items-center">
                       <ViewColumnsIcon className="h-4 w-4 mr-1.5 text-muted-foreground" />

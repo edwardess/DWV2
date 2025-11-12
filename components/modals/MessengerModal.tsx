@@ -159,6 +159,52 @@ interface PendingImage {
   previewUrl: string;
 }
 
+// Helper function to detect URLs and convert them to clickable links
+const renderTextWithLinks = (text: string): (string | JSX.Element)[] => {
+  // URL regex pattern - matches http, https, and www URLs
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  const parts: (string | JSX.Element)[] = [];
+  let lastIndex = 0;
+  let match;
+  let keyIndex = 0;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    // Add text before the URL
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+
+    // Add the URL as a clickable link
+    let url = match[0];
+    // Add https:// if it starts with www.
+    if (url.startsWith('www.')) {
+      url = 'https://' + url;
+    }
+    
+    parts.push(
+      <a
+        key={`link-${keyIndex++}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-500 hover:text-blue-700 underline break-all"
+      >
+        {match[0]}
+      </a>
+    );
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text after the last URL
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  // If no URLs were found, return the original text
+  return parts.length > 0 ? parts : [text];
+};
+
 const MessengerModal = ({ visible, onClose, projectId, projectName = "Project", projectMembers: propMembers }: MessengerModalProps): JSX.Element | null => {
   const { user } = useAuth();
   const messageInputRef = useRef<HTMLInputElement>(null);
@@ -1075,7 +1121,9 @@ const MessengerModal = ({ visible, onClose, projectId, projectName = "Project", 
                               )
                             ))}
                             {message.text && (
-                              <p className="whitespace-pre-wrap break-all overflow-wrap-anywhere text-xs sm:text-sm">{message.text}</p>
+                              <p className="whitespace-pre-wrap break-all overflow-wrap-anywhere text-xs sm:text-sm">
+                                {renderTextWithLinks(message.text)}
+                              </p>
                             )}
                             {message.senderId !== 'system' && (
                               <div className="flex items-center justify-end gap-1 mt-0.5">

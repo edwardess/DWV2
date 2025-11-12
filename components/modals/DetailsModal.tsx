@@ -203,6 +203,7 @@ const ScrollHintIndicator: React.FC = () => (
   const [isActivityExpanded, setIsActivityExpanded] = useState(false);
   const [localSamples, setLocalSamples] = useState<Array<{ url: string; type: 'image' | 'video' }>>(image?.samples || []);
   const [editLabel, setEditLabel] = useState(image?.label || "");
+  const [localWorkingOnIt, setLocalWorkingOnIt] = useState<boolean>(false);
   const prevVisibleRef = useRef(false);
   
     useEffect(() => {
@@ -225,6 +226,7 @@ const ScrollHintIndicator: React.FC = () => (
       setLocalApprovalState(image.label === "Approved");
       setLocalSamples(image.samples || []);
       setEditLabel(image.label || "");
+      setLocalWorkingOnIt(image?.workingonit ?? false);
       
       // Load activities from separate Firestore collection
       fetchActivities(image.id);
@@ -285,6 +287,7 @@ const ScrollHintIndicator: React.FC = () => (
       setDescText(image?.description || "");
       setCaptionText(image?.caption || "");
       setEditContentType(image?.contentType || "Photo");
+      setLocalWorkingOnIt(image?.workingonit ?? false);
     }
   };
 
@@ -455,6 +458,7 @@ const ScrollHintIndicator: React.FC = () => (
         lastUpdated: new Date(),
         script: script !== null ? script : image.script,
         samples: localSamples,
+        workingonit: localWorkingOnIt,
       };
       
       // Save to database via parent component's onSave handler
@@ -1779,6 +1783,8 @@ const ScrollHintIndicator: React.FC = () => (
                         firstColumnRef={firstColumnRef}
                         showScrollIndicator={showScrollIndicator}
                         user={user}
+                        localWorkingOnIt={localWorkingOnIt}
+                        setLocalWorkingOnIt={setLocalWorkingOnIt}
                       />
                     </div>
 
@@ -1928,6 +1934,8 @@ const ScrollHintIndicator: React.FC = () => (
                       firstColumnRef={firstColumnRef}
                       showScrollIndicator={showScrollIndicator}
                       user={user}
+                      localWorkingOnIt={localWorkingOnIt}
+                      setLocalWorkingOnIt={setLocalWorkingOnIt}
                     />
                   </div>
 

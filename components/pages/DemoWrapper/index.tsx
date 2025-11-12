@@ -466,6 +466,7 @@ export default function DemoWrapper({
             comments: Array.isArray(meta.comments) ? meta.comments : [],
             carouselArrangement: Array.isArray(meta.carouselArrangement) ? meta.carouselArrangement : [],
             attachments: Array.isArray(meta.attachments) ? meta.attachments : [],
+            workingonit: typeof meta.workingonit === 'boolean' ? meta.workingonit : false,
             id
           };
         });
@@ -539,6 +540,7 @@ export default function DemoWrapper({
             attachments: Array.isArray(meta.attachments) ? meta.attachments : [],
             script: typeof meta.script === 'string' ? meta.script : '',
             samples: Array.isArray(meta.samples) ? meta.samples : [],
+            workingonit: typeof meta.workingonit === 'boolean' ? meta.workingonit : false,
             id
           };
         });
